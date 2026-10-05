@@ -1,0 +1,30 @@
+# Ephemeral agent planning files never belong in this public repo.
+# They live in lhzn-io/unh-ccom-agent-lab under docs/planning/csb-census/.
+task.md
+implementation_plan.md
+walkthrough.md
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Docs build
+docs/_build/
+
+# Local data, scratch and secrets
+scratch/
+data/
+.env
+*.wibl
+
+# Census outputs
+out/
