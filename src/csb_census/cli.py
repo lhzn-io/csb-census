@@ -205,6 +205,18 @@ def reconcile(state_dir: Path, repo: str | None, memory_limit: str, threads: int
 @click.option("--start", type=click.DateTime(), required=True, help="Replay from this UTC instant.")
 @click.option("--end", type=click.DateTime(), required=True, help="Replay up to this UTC instant.")
 @click.option("--step-hours", default=6, show_default=True)
+@click.option(
+    "--grace-hours",
+    default=6,
+    show_default=True,
+    help="Keep replaying past END: files stamped before END are often published by S3 just after it.",
+)
+@click.option(
+    "--resume-at",
+    type=click.DateTime(),
+    default=None,
+    help="Continue an existing replay state that already reflects this UTC instant (skips the seed).",
+)
 @click.option("--tolerance", default=0.0001, show_default=True, help="Allowed relative unique difference.")
 @engine_options
 def replay(
@@ -213,27 +225,35 @@ def replay(
     start: datetime,
     end: datetime,
     step_hours: int,
+    grace_hours: int,
+    resume_at: datetime | None,
     tolerance: float,
     memory_limit: str,
     threads: int,
 ) -> None:
-    """Validation gate: seed as of START, replay publication batches to END, compare with the backfill."""
+    """Validation gate: seed as of START, replay publication batches to END, compare with the backfill.
+
+    The comparison window uses the filename stamp on both sides, while the replay sees files by S3
+    publication time, so batches continue for ``--grace-hours`` past END before comparing.
+    """
     t_start, t_end = _utc(start), _utc(end)
     asof = state_dir.parent / f"{state_dir.name}-asof"
     work = state_dir.parent / f"{state_dir.name}-work"
     con = _connect({"memory_limit": memory_limit, "threads": threads}, work)
     naive = t_start.replace(tzinfo=None)
-    for month in pipeline.staged_months(backfill_dir):
-        pipeline.rank(con, backfill_dir, month, before=naive, dest=asof)
-    pipeline.finalize(con, backfill_dir, before=naive, dest=asof)
     state = State(state_dir)
     s3 = S3Source()
-    incremental.seed(con, asof, state, incremental.AsOfSource(s3, t_start), work=work)
+    if resume_at is None:
+        for month in pipeline.staged_months(backfill_dir):
+            pipeline.rank(con, backfill_dir, month, before=naive, dest=asof)
+        pipeline.finalize(con, backfill_dir, before=naive, dest=asof)
+        incremental.seed(con, asof, state, incremental.AsOfSource(s3, t_start), work=work)
 
     slowest, reread = 0.0, 0
-    t = t_start
-    while t < t_end:
-        t = min(t + timedelta(hours=step_hours), t_end)
+    t = t_start if resume_at is None else _utc(resume_at)
+    t_stop = t_end + timedelta(hours=grace_hours)
+    while t < t_stop:
+        t = min(t + timedelta(hours=step_hours), t_stop)
         t0 = time.time()
         result = incremental.run(
             con, state, incremental.AsOfSource(s3, t), now=t, run_id=f"replay-{t:%Y%m%dT%H}"

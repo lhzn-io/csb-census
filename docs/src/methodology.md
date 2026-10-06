@@ -113,9 +113,12 @@ policy, and the census does not attribute the cause.
 
 Before publication, the incremental method is replayed over one month of
 publication batches, starting from the census as of the month's first day, and
-compared with the full backfill for that month. They must agree within 0.01% on
-unique soundings. The replay also reports the resend and cross-platform split,
-the bytes re-read and the slowest run, which must finish within 45 minutes.
+compared with the full backfill for that month. Both sides select files by the
+timestamp in the file name. A file can be stamped before the month ends but
+published by NCEI shortly after, so the replay runs one more batch past the end
+of the month before comparing. They must agree within 0.01% on unique
+soundings. The replay also reports the resend and cross-platform split, the
+bytes re-read and the slowest run, which must finish within 45 minutes.
 
 ## Limitations
 
