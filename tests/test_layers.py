@@ -7,7 +7,7 @@ from pathlib import Path
 import duckdb
 import pytest
 
-from csb_census import layers
+from csb_census import layers, spilhaus
 from csb_census.state import State
 from tests.synthetic import seeded, step, vdays_of_state
 
@@ -129,6 +129,24 @@ def test_recent_strip_counts_by_publication(
     layers.build(con, state, full, providers=True, now=datetime(2026, 9, 3, 12, tzinfo=UTC))
     by = json.loads((full / "recent.json").read_text())["providers"]
     assert sum(p["all"]["published"] for p in by.values()) == 18
+
+
+def test_landing_square_holds_every_r4_cell_for_every_center(
+    con: duckdb.DuckDBPyConnection,
+    state: State,
+    tmp_path: Path,
+) -> None:
+    out = tmp_path / "site-data"
+    layers.build(con, state, out)
+    r4 = con.sql(f"SELECT count(*) FROM '{(out / 'layers/r4/*/*.parquet').as_posix()}'").fetchone()
+    assert r4 is not None
+    for center in spilhaus.CENTERS:
+        cells = json.loads((out / "spilhaus" / center / "cells.json").read_text())
+        assert len(cells["u"]) == r4[0] and len(cells["unique"]) == r4[0]
+        assert all(0 <= u <= 1 for u in cells["u"]) and all(0 <= v <= 1 for v in cells["v"])
+    # Each center sits mid-square, north up for the moved ones.
+    u, v = spilhaus.to_square("americas", [-75.0, -75.0], [15.0, 16.0])
+    assert abs(u[0] - 0.5) < 1e-6 and abs(v[0] - 0.5) < 1e-6 and v[1] < v[0] and abs(u[1] - u[0]) < 1e-3
 
 
 def test_provider_views_are_opt_in(

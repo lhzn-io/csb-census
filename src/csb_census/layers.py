@@ -11,6 +11,7 @@ Layout under ``out`` (served by GitHub Pages, so browsers can fetch it cross-ori
     layers/r8/part=<r2>/cells.parquet  local detail, one file per H3 r2 parent (zoom 8+)
     layers/recent/<window>/r<res>/...  vessel-days collected in the last 7 d, 30 d or 365 d
     layers/providers/<slug>/...        the same per provider label, only with ``providers=True``
+    spilhaus/<center>/cells.json       the r4 layer projected into the world-ocean square (landing page)
 
 Archive layer files have the columns ``h3 (VARCHAR), n_unique, n_published, dup_share, n_providers,
 first_year, last_year, vessel_days, platforms``. Window files have ``h3, vessel_days, platforms,
@@ -30,6 +31,7 @@ from typing import Any
 
 import duckdb
 
+from csb_census import spilhaus
 from csb_census.pipeline import CELL_RES, VDAY_RES
 from csb_census.state import State
 
@@ -325,6 +327,7 @@ def build(
         manifest["tiles"] += _write_level(
             con, _archive_sql(res, ""), res, out / "layers" / f"r{res}", "layers"
         )
+    spilhaus.write_cells(con, _p(out / "layers" / "r4" / "*" / "*.parquet"), out)
     today = now.date()
     for name, (days, levels) in WINDOWS.items():
         base = f"layers/recent/{name}"

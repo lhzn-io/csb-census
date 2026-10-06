@@ -21,6 +21,7 @@ classifiers = [
 dependencies = [
   "duckdb>=1.1",
   "click>=8.1",
+  "pyproj>=3.7",  # PROJ 9.6+ provides the spilhaus projection
 ]
 
 [project.optional-dependencies]
