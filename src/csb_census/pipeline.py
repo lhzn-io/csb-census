@@ -16,6 +16,7 @@ Layout under ``out``::
     rank/file_counts/<month>.parquet                per (file, UNIQUE_ID) unique/duplicate counts
     rank/daily/<month>.parquet                      per (provider, collection day, H3 r5) counts
     rank/cells_r9/<month>.parquet                   per (provider, collection month, H3 r9) counts
+    rank/vdays_r8/<month>.parquet                   per (provider, platform, collection day, H3 r8) counts
     file_index.parquet                              finalize: metadata joined with counts
     _done/                                          completion markers (makes every step resumable)
 """
@@ -29,6 +30,7 @@ import duckdb
 
 H3_RES = 5  # daily time-series grain
 CELL_RES = 9  # map grain; coarser map levels are rolled up from it with h3_cell_to_parent
+VDAY_RES = 8  # vessel-day grain: one row per (platform, collection day, cell)
 
 # Single source of truth for identity. Fields are VARCHAR (read_csv all_varchar), so this hashes
 # DCDB's own rendering; coalesce keeps a missing field from shifting the separators.
@@ -53,6 +55,21 @@ def h3_cell(res: int) -> str:
               AND try_cast(LON AS DOUBLE) BETWEEN -180 AND 180
              THEN h3_latlng_to_cell(try_cast(LAT AS DOUBLE), try_cast(LON AS DOUBLE), {int(res)})
         END
+    """
+
+
+def vday_sql(table: str) -> str:
+    """Per (provider, platform, collection day, H3 r8) tallies over a classified table (``class`` column).
+
+    Platform is ``UNIQUE_ID``. Rows without a valid day or position are left out. A vessel-day
+    counts when ``n_rows - n_dup_cross_id > 0``, so data repeated under another ID adds no vessel.
+    """
+    return f"""
+        SELECT * FROM (
+          SELECT PROVIDER AS provider, UNIQUE_ID AS platform, left(TIME, 10) AS day,
+                 {h3_cell(VDAY_RES)} AS h3_r{VDAY_RES}, {TALLIES}
+          FROM {table} WHERE coll_month <> 'invalid' GROUP BY ALL
+        ) WHERE h3_r{VDAY_RES} IS NOT NULL
     """
 
 
@@ -184,7 +201,8 @@ def rank(
     src = out / "stage" / "soundings" / f"coll_month={month}" / "*.parquet"
     root = (dest or out) / "rank"
     counts_dir, daily_dir, cells_dir = root / "file_counts", root / "daily", root / f"cells_r{CELL_RES}"
-    for d in (counts_dir, daily_dir, cells_dir):
+    vdays_dir = root / f"vdays_r{VDAY_RES}"
+    for d in (counts_dir, daily_dir, cells_dir, vdays_dir):
         d.mkdir(parents=True, exist_ok=True)
     con.sql(
         f"""
@@ -225,6 +243,8 @@ def rank(
         ) TO '{_sql_path(cells_dir / f"{month}.parquet")}' (FORMAT parquet)
         """
     )
+    # Vessel-days: platforms are counted from these keys, which stay additive as tallies.
+    con.sql(f"COPY ({vday_sql('ranked')}) TO '{_sql_path(vdays_dir / f'{month}.parquet')}' (FORMAT parquet)")
     con.sql("DROP TABLE ranked")
 
 

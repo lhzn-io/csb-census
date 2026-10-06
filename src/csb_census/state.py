@@ -11,9 +11,12 @@ Tables (see docs/src/methodology.md for their meaning):
     file_months    counts per (file, UNIQUE_ID, collection month): time series and exact removals
     cells_base     counts per (provider, collection month, H3 r9) as of the last rebaseline
     cells_delta    signed additions to cells_base from incremental runs and removals
-    recent_cells   per-file cell counts for recently ingested files (exact map subtraction on removal)
+    recent_cells   per-file cell and day counts for recently ingested files (exact subtraction on removal)
+    vdays_base     counts per (provider, platform, collection day, H3 r8) as of the last rebaseline
+    vdays_delta    signed additions to vdays_base
     pending        keys seen in a listing but not yet processed
     queue          (provider, collection month) pairs needing an exact recount on garnet
+    runs           one row per incremental run or reconcile that changed the state
 """
 
 import hashlib
@@ -26,7 +29,18 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 SCHEMA_VERSION = 1
-TABLES = ("file_index", "file_months", "cells_base", "cells_delta", "recent_cells", "pending", "queue")
+TABLES = (
+    "file_index",
+    "file_months",
+    "cells_base",
+    "cells_delta",
+    "recent_cells",
+    "vdays_base",
+    "vdays_delta",
+    "pending",
+    "queue",
+    "runs",
+)
 KEEP_GENERATIONS = 3
 RELEASE_TAG = "state"
 MANIFEST = "manifest.json"

@@ -100,6 +100,29 @@ def cells_of_backfill(con: duckdb.DuckDBPyConnection, dest: Path) -> dict[int, t
     return {r[0]: (int(r[1]), int(r[2])) for r in rows if r[0] is not None}
 
 
+Vday = tuple[str, str, int]  # (platform, collection day, H3 r8)
+
+_VDAY_COUNTS = "GROUP BY 1, 2, 3 HAVING sum(n_rows - n_dup_cross_id) > 0"
+
+
+def vdays_of_state(con: duckdb.DuckDBPyConnection, state: State) -> set[Vday]:
+    parts = [state.require("vdays_base")] + ([p] if (p := state.path("vdays_delta")) else [])
+    union = " UNION ALL BY NAME ".join(f"SELECT * FROM '{p.as_posix()}'" for p in parts)
+    return set(con.sql(f"SELECT platform, day, h3_r8 FROM ({union}) {_VDAY_COUNTS}").fetchall())
+
+
+def vdays_of_backfill(con: duckdb.DuckDBPyConnection, dest: Path) -> set[Vday]:
+    glob = (dest / "rank" / "vdays_r8" / "*.parquet").as_posix()
+    return set(con.sql(f"SELECT platform, day, h3_r8 FROM '{glob}' {_VDAY_COUNTS}").fetchall())
+
+
+def r8(con: duckdb.DuckDBPyConnection, sounding: str) -> int:
+    lon, lat = sounding.split(",")[:2]
+    row = con.sql(f"SELECT h3_latlng_to_cell({lat}, {lon}, 8)").fetchone()
+    assert row is not None
+    return int(row[0])
+
+
 def seeded(con: duckdb.DuckDBPyConnection, archive: Path, tmp_path: Path) -> tuple[State, LocalSource]:
     asof = backfill(con, archive, tmp_path / "bf", before=CUTOFF)
     source = LocalSource(archive)

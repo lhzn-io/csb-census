@@ -12,7 +12,28 @@ from csb_census import incremental
 from csb_census.incremental import AsOfSource
 from csb_census.inventory import LocalSource, S3Object
 from csb_census.state import State
-from tests.synthetic import V1, backfill, cells_of_backfill, cells_of_state, per_file, seeded, step
+from tests.synthetic import (
+    S4,
+    S5,
+    V1,
+    V2,
+    backfill,
+    cells_of_backfill,
+    cells_of_state,
+    per_file,
+    r8,
+    seeded,
+    step,
+    vdays_of_backfill,
+    vdays_of_state,
+)
+
+
+def runs_of(con: duckdb.DuckDBPyConnection, state: State) -> list[tuple[str, str]]:
+    path = state.path("runs")
+    if path is None:
+        return []
+    return con.sql(f"SELECT run_id, kind FROM '{path.as_posix()}' ORDER BY run_at, run_id").fetchall()
 
 
 def test_seed_marks_horizon_and_indexes_keys(
@@ -36,6 +57,33 @@ def test_incremental_equals_full_backfill(
     full = backfill(con, archive, tmp_path / "bf")
     assert per_file(con, state.require("file_index")) == per_file(con, full / "file_index.parquet")
     assert cells_of_state(con, state) == cells_of_backfill(con, full)
+    assert vdays_of_state(con, state) == vdays_of_backfill(con, full)
+
+
+def test_cross_id_duplicates_add_no_vessel_day(
+    con: duckdb.DuckDBPyConnection, archive: Path, tmp_path: Path
+) -> None:
+    state, source = seeded(con, archive, tmp_path)
+    step(con, state, source, datetime(2026, 9, 3, 12, tzinfo=UTC), tmp_path)
+    vdays = vdays_of_state(con, state)
+    assert (V2, "2026-08-30", r8(con, S5)) in vdays  # D's own original
+    if r8(con, S4) != r8(con, S5):
+        assert (V2, "2026-08-30", r8(con, S4)) not in vdays  # D's copy of C's S4 under another ID
+    assert (V1, "2026-08-30", r8(con, S4)) in vdays
+
+
+def test_runs_log_every_committed_run(con: duckdb.DuckDBPyConnection, archive: Path, tmp_path: Path) -> None:
+    state, source = seeded(con, archive, tmp_path)
+    when = datetime(2026, 9, 3, 12, tzinfo=UTC)
+    step(con, state, source, datetime(2026, 9, 2, 12, tzinfo=UTC), tmp_path)
+    step(con, state, source, when, tmp_path)
+    step(con, state, source, when, tmp_path)  # nothing new: no generation, no row
+    incremental.reconcile(con, state, AsOfSource(source, when), now=when, work=tmp_path / "rec")
+    assert runs_of(con, state) == [
+        ("20260902T12", "incremental"),
+        ("20260903T12", "incremental"),
+        ("reconcile-20260903T1200", "reconcile"),
+    ]
 
 
 def test_whole_file_resend_needs_no_reread(
@@ -115,11 +163,13 @@ def test_reconcile_removal_subtracts_cells_and_queues_originals(
     when = datetime(2026, 9, 3, 12, tzinfo=UTC)
     step(con, state, source, when, tmp_path)
     cells_before = sum(v[0] for v in cells_of_state(con, state).values())
+    assert any(p == V2 for p, _, _ in vdays_of_state(con, state))
     d = next(archive.rglob("20260902000000*.csv"))  # D: 2 rows, holds the original of S5
     d.unlink()
     result = incremental.reconcile(con, state, AsOfSource(source, when), now=when, work=tmp_path / "rec")
     assert (result.removed, result.republished) == (1, 0)
     assert sum(v[0] for v in cells_of_state(con, state).values()) == cells_before - 2
+    assert not any(p == V2 for p, _, _ in vdays_of_state(con, state))  # D was V2's only file
     queue = con.sql(f"SELECT reason FROM '{state.require('queue').as_posix()}'").fetchall()
     assert queue == [("removed original",)]
 

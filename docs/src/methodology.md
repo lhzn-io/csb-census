@@ -40,6 +40,33 @@ Every exact duplicate shares its `TIME` value, so ranking is independent per
 collection month (the first 7 characters of `TIME`). Rows whose `TIME` is not an
 ISO date go to an `invalid` partition. They are counted, but not mapped.
 
+## Vessel-days
+
+A sounding count mostly reflects how long a logger ran and how fast its
+echosounder pings: one boat logging at the dock for a season can outweigh a busy
+harbour. To show where the crowd is, the census also counts **vessel-days**.
+
+- A **platform** is a `UNIQUE_ID`, the only vessel identifier the archive carries.
+- A vessel-day is one platform collecting in one place (an H3 resolution 8 cell,
+  about 0.7 km²) on one UTC collection day.
+- A vessel-day counts only if it holds soundings other than cross-platform
+  duplicates, so data repeated under another platform ID adds no vessel.
+- At coarser map levels, a cell's vessel-days are its distinct (platform, day)
+  pairs, so a boat crossing a large cell in a day counts once.
+
+## Two clocks
+
+The census uses two clocks and always says which:
+
+- **Publication time** is the stamp at the start of each file name, written when
+  NCEI ingested the file. It answers "what came in today". Files reach the
+  public bucket shortly after their stamp, usually in the next 6-hourly batch.
+- **Collection time** is each sounding's own `TIME`. It answers "where were
+  boats this week", and it drives every map.
+
+**Publication lag** is the time from a file's newest sounding to its publication
+stamp, measured per (file, `UNIQUE_ID`).
+
 ## File fingerprints
 
 Each (file, `UNIQUE_ID`) gets a fingerprint: the row count plus the sum of the
@@ -56,6 +83,7 @@ most duplicates without re-reading earlier files.
 | `rank/file_counts/<month>.parquet` | (file, `UNIQUE_ID`) within one collection month: rows, unique, resend, cross-platform |
 | `rank/daily/<month>.parquet` | (provider, collection day, H3 resolution 5 cell): rows, unique, resend, cross-platform, platforms |
 | `rank/cells_r9/<month>.parquet` | (provider, collection month, H3 resolution 9 cell): rows, unique, resend, cross-platform |
+| `rank/vdays_r8/<month>.parquet` | (provider, platform, collection day, H3 resolution 8 cell): rows, unique, resend, cross-platform |
 
 ## Incremental updates
 
@@ -87,7 +115,8 @@ detected online. Across the whole archive there were 4,873 such rows as of
 Once a day, a reconcile run compares the full bucket listing with the index:
 
 - A file that has disappeared is marked removed, and its counts are subtracted.
-  Map counts are subtracted exactly for files from the last 30 days. Otherwise,
+  Map counts and vessel-days are subtracted exactly for files from the last 30
+  days. Otherwise,
   and whenever a removed file held originals that later copies would inherit,
   the affected (provider, collection month) pairs are queued for a rebaseline.
 - A file whose ETag has changed is treated as removed and then republished.
@@ -98,9 +127,11 @@ The dashboard reads static files, so anyone can download and re-check them:
 
 | File | Content |
 | :--- | :--- |
-| `meta.json` | Totals: published, unique, resend, cross-platform, files, provider labels, platform IDs, and the last ingest time |
+| `meta.json` | Totals: published, unique, resend, cross-platform, files, provider labels, platform IDs, vessel-days, platforms active in the last 30 days, and the last ingest time |
 | `timeseries_month.json` | The same counts per collection month |
-| `layers/r4`, `r6`, `r8` | All-time H3 cells at resolutions 4, 6 and 8 (finer levels split by parent cell), each with unique and published soundings, duplicate share, provider count, and the first and last collection year |
+| `recent.json` | Recent activity by publication time (last 24 hours, 7 and 30 days, and all time: files, soundings, platforms, new platforms, median lag), 6-hourly batches for 30 days, daily series by publication and by collection day for 400 days, the lag distribution, and the census's own recent runs |
+| `layers/r4`, `r6`, `r8` | All-time H3 cells at resolutions 4, 6 and 8 (finer levels split by parent cell), each with unique and published soundings, duplicate share, provider count, the first and last collection year, vessel-days and platforms |
+| `layers/recent/7d`, `30d`, `365d` | Vessel-days and platforms per cell for soundings collected in the last 7, 30 or 365 days (the 365-day window stops at resolution 6) |
 | `layers/manifest.json` | Every layer file with its bounding box |
 | `lis/` | Long Island Sound at resolution 9: cells and a yearly coverage summary |
 

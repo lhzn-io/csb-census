@@ -30,7 +30,7 @@ from pathlib import Path
 import duckdb
 
 from csb_census.inventory import CSV_PREFIX, ObjectSource, S3Object, day_prefix
-from csb_census.pipeline import CELL_RES, TALLIES, file_meta_sql, h3_cell, read_keyed
+from csb_census.pipeline import CELL_RES, TALLIES, VDAY_RES, file_meta_sql, h3_cell, read_keyed, vday_sql
 from csb_census.state import TABLES, State
 
 log = logging.getLogger(__name__)
@@ -47,9 +47,14 @@ DDL = {
     "cells_base": f"provider VARCHAR, coll_month VARCHAR, h3_r{CELL_RES} UBIGINT, {COUNTS}",
     "cells_delta": f"provider VARCHAR, coll_month VARCHAR, h3_r{CELL_RES} UBIGINT, {COUNTS}, run_id VARCHAR",
     "recent_cells": f"""file VARCHAR, unique_id VARCHAR, provider VARCHAR, ingested TIMESTAMP,
-        coll_month VARCHAR, h3_r{CELL_RES} UBIGINT, {COUNTS}""",
+        coll_month VARCHAR, day VARCHAR, h3_r{CELL_RES} UBIGINT, {COUNTS}""",
+    "vdays_base": f"provider VARCHAR, platform VARCHAR, day VARCHAR, h3_r{VDAY_RES} UBIGINT, {COUNTS}",
+    "vdays_delta": f"""provider VARCHAR, platform VARCHAR, day VARCHAR, h3_r{VDAY_RES} UBIGINT, {COUNTS},
+        run_id VARCHAR""",
     "pending": "key VARCHAR, etag VARCHAR, seen_at TIMESTAMP",
     "queue": "provider VARCHAR, coll_month VARCHAR, reason VARCHAR, queued_at TIMESTAMP",
+    "runs": f"""run_id VARCHAR, kind VARCHAR, run_at TIMESTAMP, generation BIGINT, new_files BIGINT, {COUNTS},
+        reread_bytes BIGINT, capped BOOLEAN, removed BIGINT""",
 }
 assert set(DDL) == set(TABLES)
 
@@ -99,6 +104,36 @@ def register_objects(
         """
     )
     return n
+
+
+def _log_run(
+    con: duckdb.DuckDBPyConnection,
+    run_id: str,
+    kind: str,
+    now: datetime,
+    generation: int,
+    new_files: int,
+    tallies: Sequence[int],
+    *,
+    reread_bytes: int = 0,
+    capped: bool = False,
+    removed: int = 0,
+) -> None:
+    """Append one row to ``runs`` (committed with the generation it describes)."""
+    con.execute(
+        "INSERT INTO runs VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        [
+            run_id,
+            kind,
+            now.astimezone(UTC).replace(tzinfo=None),
+            generation,
+            new_files,
+            *(int(t) for t in tallies),
+            reread_bytes,
+            capped,
+            removed,
+        ],
+    )
 
 
 def _day_of_key(key: str) -> date | None:
@@ -297,14 +332,16 @@ def _run(
         FROM cls GROUP BY ALL
         """
     )
+    con.sql(f"INSERT INTO vdays_delta BY NAME SELECT *, '{run_id}' AS run_id FROM ({vday_sql('cls')})")
     cutoff = now - timedelta(days=RECENT_DAYS)
     con.sql(f"DELETE FROM recent_cells WHERE ingested < TIMESTAMP '{cutoff:%Y-%m-%d %H:%M:%S}'")
     con.sql(
         f"""
         INSERT INTO recent_cells BY NAME
         SELECT file, UNIQUE_ID AS unique_id, PROVIDER AS provider, min(ingested) AS ingested, coll_month,
+               CASE WHEN coll_month = 'invalid' THEN NULL ELSE left(TIME, 10) END AS day,
                {h3_cell(CELL_RES)} AS h3_r{CELL_RES}, {TALLIES}
-        FROM cls GROUP BY file, UNIQUE_ID, PROVIDER, coll_month, h3_r{CELL_RES}
+        FROM cls GROUP BY file, UNIQUE_ID, PROVIDER, coll_month, day, h3_r{CELL_RES}
         """
     )
     con.sql("DELETE FROM pending WHERE key IN (SELECT key FROM sel)")
@@ -318,8 +355,19 @@ def _run(
     newest_ingested = max_ing[0].isoformat() if max_ing and max_ing[0] else m.max_ingested
     reread_bytes = sum(o.size for o in cand_objs)
     nfp = len(con.sql("SELECT 1 FROM fp").fetchall())
+    _log_run(
+        con,
+        run_id,
+        "incremental",
+        now,
+        m.generation + 1,
+        len(selected),
+        tallies,
+        reread_bytes=reread_bytes,
+        capped=capped,
+    )
 
-    changed = ("file_index", "file_months", "cells_delta", "recent_cells", "pending")
+    changed = ("file_index", "file_months", "cells_delta", "recent_cells", "vdays_delta", "pending", "runs")
     manifest = state.commit(
         save_tables(con, changed, work / "out"),
         max_ingested=newest_ingested,
@@ -393,6 +441,19 @@ def reconcile(
     )
     con.sql(
         f"""
+        INSERT INTO vdays_delta BY NAME
+        SELECT provider, unique_id AS platform, day,
+               h3_cell_to_parent(h3_r{CELL_RES}, {VDAY_RES}) AS h3_r{VDAY_RES},
+               -sum(n_rows) AS n_rows, -sum(n_unique) AS n_unique,
+               -sum(n_dup_resend) AS n_dup_resend, -sum(n_dup_cross_id) AS n_dup_cross_id,
+               'reconcile-{now:%Y%m%dT%H%M}' AS run_id
+        FROM recent_cells r SEMI JOIN gone g ON g.file = r.file AND g.unique_id = r.unique_id
+        WHERE day IS NOT NULL AND h3_r{CELL_RES} IS NOT NULL
+        GROUP BY ALL
+        """
+    )
+    con.sql(
+        f"""
         INSERT INTO queue BY NAME
         SELECT DISTINCT g.provider, m.coll_month,
                CASE WHEN g.n_unique > 0 THEN 'removed original' ELSE 'removed, cells not held' END AS reason,
@@ -420,9 +481,18 @@ def reconcile(
     )
     newly_pending = len(con.sql("SELECT 1 FROM pending").fetchall()) - before
     queued = len(con.sql("SELECT DISTINCT provider, coll_month FROM queue").fetchall())
-    manifest = state.commit(
-        save_tables(con, ("file_index", "cells_delta", "recent_cells", "pending", "queue"), work / "out")
+    _log_run(
+        con,
+        f"reconcile-{now:%Y%m%dT%H%M}",
+        "reconcile",
+        now,
+        state.manifest.generation + 1,
+        0,
+        (0, 0, 0, 0),
+        removed=int(removed),
     )
+    changed = ("file_index", "cells_delta", "recent_cells", "vdays_delta", "pending", "queue", "runs")
+    manifest = state.commit(save_tables(con, changed, work / "out"))
     result = ReconcileResult(
         manifest.generation, listed, int(removed), int(republished), newly_pending, queued
     )
@@ -471,6 +541,10 @@ def seed(
         FROM read_parquet('{_p(rank / f"cells_r{CELL_RES}" / "*.parquet")}') GROUP BY ALL
         """
     )
+    vdays = rank / f"vdays_r{VDAY_RES}"
+    if not any(vdays.glob("*.parquet")):
+        raise FileNotFoundError(f"{vdays} is empty; re-run `csb-census rank` to add vessel-days")
+    con.sql(f"INSERT INTO vdays_base BY NAME SELECT * FROM read_parquet('{_p(vdays / '*.parquet')}')")
     max_ing = con.sql("SELECT max(ingested) FROM file_index").fetchone()
     newest = max_ing[0] if max_ing and max_ing[0] else None
     if newest is not None:

@@ -103,6 +103,27 @@ def test_cross_id_duplicate_is_classified(census: tuple[duckdb.DuckDBPyConnectio
     assert row == (2, 0, 1)
 
 
+def test_vessel_days_follow_the_soundings(census: tuple[duckdb.DuckDBPyConnection, Path]) -> None:
+    con, out = census
+    vdays = (out / "rank" / f"vdays_r{pipeline.VDAY_RES}").as_posix()
+    got = con.sql(
+        f"""SELECT platform, day, h3_r8 FROM '{vdays}/*.parquet'
+            GROUP BY ALL HAVING sum(n_rows - n_dup_cross_id) > 0 ORDER BY ALL"""
+    ).fetchall()
+
+    # Every valid sounding's (platform, day, cell), except D's copy of S4 under V2 (a cross-ID duplicate).
+    def key(vessel: str, sounding: str) -> tuple[str, str, int]:
+        lon, lat, _, time = sounding.split(",")
+        cell = con.sql(f"SELECT h3_latlng_to_cell({lat}, {lon}, {pipeline.VDAY_RES})").fetchone()
+        assert cell is not None
+        return vessel, time[:10], int(cell[0])
+
+    want = sorted({key(V1, s) for s in (S1, S2, S3, S4)} | {key(V2, S5)})
+    assert got == want
+    rows = con.sql(f"SELECT sum(n_rows) FROM '{vdays}/*.parquet'").fetchone()
+    assert rows == (10,)  # 11 rows less the malformed one, which has no day or cell
+
+
 def test_malformed_rows_are_counted_not_mapped(census: tuple[duckdb.DuckDBPyConnection, Path]) -> None:
     con, out = census
     assert "invalid" in pipeline.staged_months(out)
