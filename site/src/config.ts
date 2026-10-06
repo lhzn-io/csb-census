@@ -8,9 +8,3 @@ export const LIS_BBOX: [number, number, number, number] = [-73.82, 40.84, -71.84
 
 /** Map zoom at which each H3 resolution takes over (see layers.py LEVELS). */
 export const RES_FOR_ZOOM = (zoom: number): 4 | 6 | 8 => (zoom < 5 ? 4 : zoom < 8 ? 6 : 8);
-
-export const ESRI_ATTRIBUTION =
-  "Basemap: Esri, GEBCO, NOAA, National Geographic, Garmin, HERE, Geonames.org, and other contributors";
-
-export const ESRI_DARK_ATTRIBUTION =
-  "Basemap: Esri, HERE, Garmin, &copy; OpenStreetMap contributors, and the GIS user community";

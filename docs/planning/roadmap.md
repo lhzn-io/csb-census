@@ -17,7 +17,7 @@
 
 ## Phase 2: Dashboard
 
-- [x] Static site: Esri Ocean basemap, deck.gl H3 layers loaded by viewport, metrics, monthly chart
+- [x] Static site: OpenFreeMap basemaps (Dark, Positron), deck.gl H3 layers loaded by viewport, metrics, monthly chart
 - [x] Duplicate-share view; provider views behind a build switch
 - [x] Vessel-days (distinct platform and collection day per cell) as a map metric, in the state and layers
 - [x] Landing page; recent-activity page (publication windows, 6-hourly batches, daily series, lag, recent-window map); dark basemap

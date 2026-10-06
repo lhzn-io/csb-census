@@ -1,10 +1,11 @@
 import type { Layer } from "@deck.gl/core";
 import { H3HexagonLayer } from "@deck.gl/geo-layers";
 import { MapboxOverlay } from "@deck.gl/mapbox";
-import { AttributionControl, Map as MapLibreMap, NavigationControl } from "maplibre-gl";
+import { AttributionControl, Map as MapLibreMap, NavigationControl, setWorkerUrl } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
+import workerUrl from "maplibre-gl/dist/maplibre-gl-csp-worker.js?url";
 
-import { DATA_BEFORE, setBasemap, styleFor, watchBasemap, type Basemap } from "./basemap";
+import { dataBefore, isBasemap, setBasemap, styleUrl, type Basemap } from "./basemap";
 import type { RGBA } from "./colors";
 import { RES_FOR_ZOOM } from "./config";
 import { cellsFor, visibleTiles, type Cell, type Tile } from "./tiles";
@@ -32,29 +33,30 @@ export interface MapView {
   refresh: () => Promise<void>;
 }
 
-// MapboxOverlay (interleaved) reads `beforeId` from layer props; deck's base layer types omit it.
-const UNDER_LABELS = { beforeId: DATA_BEFORE } as object;
+// Vector basemaps parse tiles in MapLibre's web worker; under Vite the worker must be its own file.
+setWorkerUrl(workerUrl);
 
 function savedBasemap(key: string, fallback: Basemap): Basemap {
   try {
     const v = localStorage.getItem(key);
-    return v === "dark" || v === "ocean" ? v : fallback;
+    return isBasemap(v) ? v : fallback;
   } catch {
     return fallback;
   }
 }
 
-/** A MapLibre map with Esri basemaps and a deck.gl H3 overlay that loads only the tiles in view. */
+/** A MapLibre map with OpenFreeMap basemaps and a deck.gl H3 overlay that loads only the tiles in view. */
 export function createMapView(opts: MapViewOptions): MapView {
   const initial = savedBasemap(opts.storageKey, opts.basemap);
   const map = new MapLibreMap({
     container: opts.container,
-    style: styleFor(initial),
+    style: styleUrl(initial),
     center: opts.center ?? [-40, 30],
     zoom: opts.zoom ?? 1.6,
     attributionControl: false,
     hash: true,
   });
+  if (import.meta.env.DEV) (window as unknown as { csbMap: MapLibreMap }).csbMap = map; // console debugging
   map.addControl(new NavigationControl({ showCompass: false }), "top-right");
   map.addControl(
     new AttributionControl({
@@ -62,7 +64,6 @@ export function createMapView(opts: MapViewOptions): MapView {
       customAttribution: "Census: Long Horizon Observatory, from NOAA NCEI / IHO DCDB data. Not for navigation.",
     }),
   );
-  watchBasemap(map);
   const overlay = new MapboxOverlay({ interleaved: true, layers: [] });
   map.addControl(overlay);
 
@@ -71,7 +72,7 @@ export function createMapView(opts: MapViewOptions): MapView {
     input.checked = input.value === initial;
     input.addEventListener("change", () => {
       const kind = input.value as Basemap;
-      setBasemap(map, kind);
+      setBasemap(map, kind, () => void refresh());
       try {
         localStorage.setItem(opts.storageKey, kind);
       } catch {
@@ -82,7 +83,8 @@ export function createMapView(opts: MapViewOptions): MapView {
 
   const hex = (id: string, data: Cell[], res: number): Layer =>
     new H3HexagonLayer<Cell>({
-      ...UNDER_LABELS,
+      // MapboxOverlay (interleaved) reads beforeId from layer props; deck's base layer types omit it.
+      ...({ beforeId: dataBefore(map) } as object),
       id,
       data,
       getHexagon: (d) => d.h3,
