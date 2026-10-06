@@ -131,6 +131,19 @@ def test_recent_strip_counts_by_publication(
     assert sum(p["all"]["published"] for p in by.values()) == 18
 
 
+def test_meta_reports_latency_behind_ncei(
+    con: duckdb.DuckDBPyConnection,
+    state: State,
+    tmp_path: Path,
+) -> None:
+    meta = layers.build(con, state, tmp_path / "site-data")
+    assert meta["last_batch_published"] == "2026-09-03T02:01"  # file H, the newest the step took in
+    # The run finished in real time (now), long after that synthetic publication: a positive latency,
+    # and within the last 30 days of real time, so it is also the median.
+    assert meta["last_latency_min"] > 0
+    assert meta["median_latency_min_30d"] == meta["last_latency_min"]
+
+
 def test_landing_square_holds_every_r4_cell_for_every_center(
     con: duckdb.DuckDBPyConnection,
     state: State,

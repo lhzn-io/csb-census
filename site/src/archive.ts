@@ -1,5 +1,5 @@
 /** Full archive: every sounding DCDB has published, by place. */
-import { $, frameChart, renderColumns, renderHorizon, renderLadder, renderReadouts, renderReflection, table, wireLogbook, YELLOW } from "./chartroom";
+import { $, frameChart, renderUpdated, renderColumns, renderHorizon, renderLadder, renderReadouts, renderReflection, table, wireLogbook, YELLOW } from "./chartroom";
 import { loadSeries, type Series } from "./charts";
 import { ARCHIVE_BINS, binColor, dupColor, uniqueColor, type RGBA } from "./colors";
 import { LIS_BBOX } from "./config";
@@ -121,8 +121,7 @@ async function main(): Promise<void> {
   state.manifest = manifest;
   band(meta, series);
   logbook(meta);
-  // Keep the note's link; add when the data runs to.
-  $("mast-note").append(` Data through ${meta.last_ingested?.slice(0, 10) ?? "?"}, generation ${meta.generation}.`);
+  renderUpdated(meta);
 
   for (const input of document.querySelectorAll<HTMLInputElement>('input[name="metric"]')) {
     input.addEventListener("change", () => {

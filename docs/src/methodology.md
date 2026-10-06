@@ -67,6 +67,12 @@ The census uses two clocks and always says which:
 **Publication lag** is the time from a file's newest sounding to its publication
 stamp, measured per (file, `UNIQUE_ID`).
 
+**Census latency** is how far the census runs behind NCEI: for each update that
+takes in new files, the time from the newest of those files appearing in the
+public bucket (its S3 publication time) to the update finishing. The pages show
+the latest value and the median over the last 30 days, next to when the data
+was last updated.
+
 ## File fingerprints
 
 Each (file, `UNIQUE_ID`) gets a fingerprint: the row count plus the sum of the
@@ -127,7 +133,7 @@ The dashboard reads static files, so anyone can download and re-check them:
 
 | File | Content |
 | :--- | :--- |
-| `meta.json` | Totals: published, unique, resend, cross-platform, files, provider labels, platform IDs, vessel-days, platforms active in the last 30 days, and the last ingest time |
+| `meta.json` | Totals: published, unique, resend, cross-platform, files, provider labels, platform IDs, vessel-days, platforms active in the last 30 days, the last ingest time, when the data was built, and the census latency (latest and 30-day median) |
 | `timeseries_month.json` | The same counts per collection month |
 | `recent.json` | Recent activity by publication time (last 24 hours, 7 and 30 days, and all time: files, soundings, platforms, new platforms, median lag), 6-hourly batches for 30 days, daily series by publication and by collection day for 400 days, the lag distribution, and the census's own recent runs |
 | `layers/r4`, `r6`, `r8` | All-time H3 cells at resolutions 4, 6 and 8 (finer levels split by parent cell), each with unique and published soundings, duplicate share, provider count, the first and last collection year, vessel-days and platforms |

@@ -14,6 +14,10 @@ export interface Meta {
   vessel_days?: number;
   platforms_active_30d?: number;
   provider_views: boolean;
+  /** Latency behind NCEI (layers.latency): S3 publication of the last batch taken in, and minutes to the census. */
+  last_batch_published?: string | null;
+  last_latency_min?: number | null;
+  median_latency_min_30d?: number | null;
 }
 
 export async function loadMeta(): Promise<Meta> {

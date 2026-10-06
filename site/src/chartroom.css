@@ -11,7 +11,7 @@
   --dim: #9aa8b3;
   --gutter: 26px;
   --mast: 86px;
-  --band: 208px;
+  --band: 226px;
   --sans: "Josefin Sans", "Futura", "Century Gothic", sans-serif;
   --serif: "Instrument Serif", "Iowan Old Style", Georgia, serif;
   --mono: "Martian Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
@@ -149,6 +149,12 @@ a { color: inherit; }
   background: linear-gradient(100deg, var(--deep) 0%, #3d5668 55%, var(--slate) 100%);
   border-top: 1px solid rgba(222, 207, 3, 0.55);
 }
+.updated {
+  grid-column: 1 / -1; margin: -6px 0 -8px; font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.02em;
+  color: rgba(255, 255, 255, 0.78);
+}
+.updated b { font-family: var(--sans); font-size: 9px; font-weight: 700; letter-spacing: 0.22em; text-transform: uppercase; color: var(--yellow); margin-right: 4px; }
+.updated .ago { color: rgba(255, 255, 255, 0.55); }
 .readouts { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px 26px; align-content: center; }
 .readout .num {
   font-family: var(--figures); font-size: var(--figures-size, 46px); font-weight: var(--figures-weight, 400);

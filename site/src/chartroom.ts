@@ -243,6 +243,32 @@ export function renderColumns(
   }
 }
 
+/* ---------- Freshness: when the data was updated, and how far behind NCEI the census runs ---------- */
+
+export interface Freshness {
+  built_at: string;
+  last_batch_published?: string | null;
+  last_latency_min?: number | null;
+  median_latency_min_30d?: number | null;
+}
+
+function ago(iso: string): string {
+  const min = Math.max(0, Math.round((Date.now() - Date.parse(iso)) / 60000));
+  if (min < 60) return `${min} min ago`;
+  const h = Math.round(min / 60);
+  return h < 48 ? `${h} h ago` : `${Math.round(h / 24)} days ago`;
+}
+
+export function renderUpdated(meta: Freshness): void {
+  const at = meta.built_at.slice(0, 16).replace("T", " ");
+  const parts = [`<b>Updated</b> ${at} UTC <span class="ago">(${ago(meta.built_at)})</span>`];
+  if (meta.last_latency_min != null) {
+    const typical = meta.median_latency_min_30d != null ? `, typically ${meta.median_latency_min_30d} min` : "";
+    parts.push(`NCEI's latest batch reached the census ${meta.last_latency_min} min after it was published${typical}`);
+  }
+  $("updated").innerHTML = parts.join(" · ");
+}
+
 /* ---------- Logbook drawer ---------- */
 
 export function wireLogbook(): void {

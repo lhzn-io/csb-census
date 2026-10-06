@@ -199,6 +199,52 @@ def _lag_case() -> str:
     return f"CASE {cases} ELSE '{LAG_LAST}' END"
 
 
+def _runs_sql(con: duckdb.DuckDBPyConnection, path: Path) -> str:
+    """The runs table, with the latency columns NULL for runs logged before they existed."""
+    have = {c for (c, *_) in con.sql(f"DESCRIBE SELECT * FROM '{_p(path)}'").fetchall()}
+    extra = ", ".join(f"NULL::TIMESTAMP AS {c}" for c in ("newest_published", "finished_at") if c not in have)
+    return f"SELECT *{', ' + extra if extra else ''} FROM '{_p(path)}'"
+
+
+def latency(con: duckdb.DuckDBPyConnection, state: State, now: datetime) -> dict[str, Any]:
+    """How far the census runs behind NCEI: from a batch appearing in the bucket to the census holding it.
+
+    Latency of a run = its finish time minus the S3 publication time of the newest file it took in.
+    Only runs that took in new files count; the median covers the last 30 days.
+    """
+    runs = state.path("runs")
+    empty: dict[str, Any] = {
+        "last_batch_published": None,
+        "last_latency_min": None,
+        "median_latency_min_30d": None,
+    }
+    if runs is None:
+        return empty
+    con.sql(f"CREATE OR REPLACE TEMP TABLE runs_lat AS {_runs_sql(con, runs)}")
+    since = _ts(now - timedelta(days=30))
+    row = con.sql(
+        f"""
+        WITH r AS (
+          SELECT newest_published, finished_at,
+                 date_diff('second', newest_published, finished_at) / 60.0 AS lat
+          FROM runs_lat
+          WHERE kind = 'incremental' AND new_files > 0
+            AND newest_published IS NOT NULL AND finished_at IS NOT NULL
+        )
+        SELECT (SELECT newest_published FROM r ORDER BY finished_at DESC LIMIT 1),
+               (SELECT round(lat) FROM r ORDER BY finished_at DESC LIMIT 1),
+               (SELECT round(median(lat)) FROM r WHERE finished_at >= {since})
+        """
+    ).fetchone()
+    if row is None or row[0] is None:
+        return empty
+    return {
+        "last_batch_published": row[0].isoformat(timespec="minutes"),
+        "last_latency_min": int(row[1]),
+        "median_latency_min_30d": int(row[2]) if row[2] is not None else None,
+    }
+
+
 def _recent(con: duckdb.DuckDBPyConnection, state: State, now: datetime, providers: bool) -> dict[str, Any]:
     """Recent activity by publication (file stamp) and by collection day."""
     idx = _p(state.require("file_index"))
@@ -289,10 +335,13 @@ def _recent(con: duckdb.DuckDBPyConnection, state: State, now: datetime, provide
             "reread_bytes",
             "capped",
             "removed",
+            "newest_published",
+            "finished_at",
         ]
+        con.sql(f"CREATE OR REPLACE TEMP TABLE runs_all AS {_runs_sql(con, runs)}")
         recent["runs"] = {
             "columns": cols,
-            "rows": _rows(con, f"SELECT {', '.join(cols)} FROM '{_p(runs)}' ORDER BY run_at DESC LIMIT 120"),
+            "rows": _rows(con, f"SELECT {', '.join(cols)} FROM runs_all ORDER BY run_at DESC LIMIT 120"),
         }
     if providers:
         names = [n for (n,) in con.sql("SELECT DISTINCT provider FROM pub ORDER BY 1").fetchall()]
@@ -381,6 +430,7 @@ def build(
         "vessel_days": vessels[0],
         "platforms_active_30d": vessels[1],
         "provider_views": providers,
+        **latency(con, state, now),
     }
     (out / "meta.json").write_text(json.dumps(meta, indent=2))
 

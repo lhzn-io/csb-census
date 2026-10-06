@@ -1,8 +1,8 @@
 /** Recent activity: what NCEI published lately, and where boats have been. */
-import { $, frameChart, renderColumns, renderHorizon, renderLadder, renderReadouts, renderReflection, table, wireLogbook, YELLOW } from "./chartroom";
+import { $, frameChart, renderUpdated, renderColumns, renderHorizon, renderLadder, renderReadouts, renderReflection, table, wireLogbook, YELLOW } from "./chartroom";
 import { RECENT_BINS, binColor } from "./colors";
 import { createMapView, whenLoaded } from "./mapview";
-import { compact } from "./metrics";
+import { compact, loadMeta } from "./metrics";
 import { column, epochs, hours, loadRecent, type Recent, type WindowName } from "./recentdata";
 import { loadManifest, type Cell, type LayerManifest } from "./tiles";
 
@@ -81,7 +81,7 @@ function logbook(r: Recent): void {
 async function main(): Promise<void> {
   ladder();
   wireLogbook();
-  const [recent, manifest] = await Promise.all([loadRecent(), loadManifest()]);
+  const [recent, manifest, meta] = await Promise.all([loadRecent(), loadManifest(), loadMeta()]);
   state.manifest = manifest;
   const batches = recent.batches;
   renderReflection(column(batches, "unique").slice(-7).reverse(), "unique soundings, last 7 batches");
@@ -98,8 +98,7 @@ async function main(): Promise<void> {
   const uni = column(batches, "unique");
   renderColumns(pub.map((p, i) => [uni[i], Math.max(0, p - uni[i])]), [YELLOW, "rgba(255,255,255,0.35)"]);
   logbook(recent);
-  // Keep the note's link; add when the windows end.
-  $("mast-note").append(` Windows end ${recent.now.slice(0, 16).replace("T", " ")} UTC.`);
+  renderUpdated(meta);
 
   for (const input of document.querySelectorAll<HTMLInputElement>('input[name="clock"]')) {
     input.addEventListener("change", () => horizon(recent, input.value as "pub" | "coll"));

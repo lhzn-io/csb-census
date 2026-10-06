@@ -42,7 +42,7 @@ DDL = {
     "file_index": f"""file VARCHAR, unique_id VARCHAR, provider VARCHAR, t_min VARCHAR, t_max VARCHAR,
         lon_min DOUBLE, lon_max DOUBLE, lat_min DOUBLE, lat_max DOUBLE, fingerprint UBIGINT,
         ingested TIMESTAMP, {COUNTS}, key VARCHAR, size BIGINT, etag VARCHAR, status VARCHAR,
-        removed_at TIMESTAMP, method VARCHAR, dup_of VARCHAR, run_id VARCHAR""",
+        removed_at TIMESTAMP, method VARCHAR, dup_of VARCHAR, run_id VARCHAR, published_at TIMESTAMP""",
     "file_months": f"file VARCHAR, unique_id VARCHAR, coll_month VARCHAR, {COUNTS}",
     "cells_base": f"provider VARCHAR, coll_month VARCHAR, h3_r{CELL_RES} UBIGINT, {COUNTS}",
     "cells_delta": f"provider VARCHAR, coll_month VARCHAR, h3_r{CELL_RES} UBIGINT, {COUNTS}, run_id VARCHAR",
@@ -54,7 +54,8 @@ DDL = {
     "pending": "key VARCHAR, etag VARCHAR, seen_at TIMESTAMP",
     "queue": "provider VARCHAR, coll_month VARCHAR, reason VARCHAR, queued_at TIMESTAMP",
     "runs": f"""run_id VARCHAR, kind VARCHAR, run_at TIMESTAMP, generation BIGINT, new_files BIGINT, {COUNTS},
-        reread_bytes BIGINT, capped BOOLEAN, removed BIGINT""",
+        reread_bytes BIGINT, capped BOOLEAN, removed BIGINT,
+        newest_published TIMESTAMP, finished_at TIMESTAMP""",
 }
 assert set(DDL) == set(TABLES)
 
@@ -118,10 +119,17 @@ def _log_run(
     reread_bytes: int = 0,
     capped: bool = False,
     removed: int = 0,
+    newest_published: datetime | None = None,
 ) -> None:
-    """Append one row to ``runs`` (committed with the generation it describes)."""
+    """Append one row to ``runs`` (committed with the generation it describes).
+
+    ``newest_published`` is the S3 publication time of the newest file the run took in; with
+    ``finished_at`` it gives the census's latency behind NCEI.
+    """
     con.execute(
-        "INSERT INTO runs VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        """INSERT INTO runs (run_id, kind, run_at, generation, new_files, n_rows, n_unique, n_dup_resend,
+                             n_dup_cross_id, reread_bytes, capped, removed, newest_published, finished_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         [
             run_id,
             kind,
@@ -132,6 +140,8 @@ def _log_run(
             reread_bytes,
             capped,
             removed,
+            newest_published,
+            datetime.now(UTC).replace(tzinfo=None),
         ],
     )
 
@@ -311,7 +321,7 @@ def _run(
         SELECT n.*, c.n_unique, c.n_dup_resend, c.n_dup_cross_id,
                s.key, s.size, s.etag, 'live' AS status, NULL AS removed_at,
                CASE WHEN fp.dup_of IS NULL THEN 'ranked' ELSE 'fingerprint' END AS method,
-               fp.dup_of, '{run_id}' AS run_id
+               fp.dup_of, '{run_id}' AS run_id, s.last_modified AS published_at
         FROM nf n
         JOIN (SELECT file, UNIQUE_ID AS unique_id, {TALLIES} FROM cls GROUP BY ALL) c USING (file, unique_id)
         JOIN sel s ON s.name = n.file
@@ -365,6 +375,7 @@ def _run(
         tallies,
         reread_bytes=reread_bytes,
         capped=capped,
+        newest_published=max(o.last_modified for o in selected).astimezone(UTC).replace(tzinfo=None),
     )
 
     changed = ("file_index", "file_months", "cells_delta", "recent_cells", "vdays_delta", "pending", "runs")
@@ -519,7 +530,7 @@ def seed(
     con.sql(
         f"""
         INSERT INTO file_index BY NAME
-        SELECT b.*, l.key, l.size, l.etag,
+        SELECT b.*, l.key, l.size, l.etag, l.last_modified AS published_at,
                CASE WHEN l.key IS NULL THEN 'removed' ELSE 'live' END AS status,
                NULL AS removed_at, 'backfill' AS method, NULL AS dup_of, 'seed' AS run_id
         FROM read_parquet('{_p(idx)}') b LEFT JOIN listed l ON l.name = b.file

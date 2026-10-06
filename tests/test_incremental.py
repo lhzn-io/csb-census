@@ -86,6 +86,24 @@ def test_runs_log_every_committed_run(con: duckdb.DuckDBPyConnection, archive: P
     ]
 
 
+def test_publication_times_are_kept_for_latency(
+    con: duckdb.DuckDBPyConnection, archive: Path, tmp_path: Path
+) -> None:
+    state, source = seeded(con, archive, tmp_path)
+    step(con, state, source, datetime(2026, 9, 3, 12, tzinfo=UTC), tmp_path)
+    idx = state.require("file_index").as_posix()
+    # The synthetic bucket publishes each file 60 s after its stamp (tests/synthetic.py, put()).
+    lag = con.sql(
+        f"""SELECT DISTINCT date_diff('second', strptime(left(file, 14), '%Y%m%d%H%M%S'), published_at)
+            FROM '{idx}' WHERE status = 'live'"""
+    ).fetchall()
+    assert lag == [(60,)]
+    runs = con.sql(
+        f"SELECT newest_published, finished_at FROM '{state.require('runs').as_posix()}'"
+    ).fetchall()
+    assert runs[0][0] == datetime(2026, 9, 3, 2, 1) and runs[0][1] is not None  # H, the last file published
+
+
 def test_whole_file_resend_needs_no_reread(
     con: duckdb.DuckDBPyConnection, archive: Path, tmp_path: Path
 ) -> None:
