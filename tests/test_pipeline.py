@@ -62,6 +62,20 @@ def test_totals(census: tuple[duckdb.DuckDBPyConnection, Path]) -> None:
     assert (rows, unique, resend, cross) == (11, 6, 4, 1)
 
 
+def test_map_cells_reconcile_with_index(census: tuple[duckdb.DuckDBPyConnection, Path]) -> None:
+    con, out = census
+    cells = (out / "rank" / f"cells_r{pipeline.CELL_RES}").as_posix()
+    got = con.sql(
+        f"SELECT sum(n_rows), sum(n_unique), sum(n_dup_resend), sum(n_dup_cross_id) FROM '{cells}/*.parquet'"
+    ).fetchone()
+    want = con.sql(
+        "SELECT sum(n_rows), sum(n_unique), sum(n_dup_resend), sum(n_dup_cross_id) FROM idx"
+    ).fetchone()
+    assert got == want
+    unmapped = con.sql(f"SELECT sum(n_rows) FROM '{cells}/*.parquet' WHERE h3_r9 IS NULL").fetchone()
+    assert unmapped == (1,)  # the malformed row is counted but has no cell
+
+
 def test_index_counts_are_integers(census: tuple[duckdb.DuckDBPyConnection, Path]) -> None:
     con, _ = census
     types = dict(con.sql("SELECT column_name, column_type FROM (DESCRIBE idx)").fetchall())

@@ -1,0 +1,91 @@
+name: Census update
+
+on:
+  # Scheduled runs stay off until launch (after the DCDB/CIRES heads-up and the garnet
+  # validation gate). To launch: uncomment, then push the seed with `csb-census state push --init`.
+  # schedule:
+  #   - cron: "40 0,6,12,18 * * *" # incremental, about 40 min after each NCEI publication batch
+  #   - cron: "15 3 * * *" # daily reconcile against the full bucket listing
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Which job to run
+        type: choice
+        options: [incremental, reconcile]
+        default: incremental
+
+permissions:
+  contents: write # read and write the `state` release assets
+  pages: write
+  id-token: write
+  actions: write # re-enable this workflow so the 60-day inactivity rule never pauses the schedule
+
+concurrency:
+  group: csb-census-state
+  cancel-in-progress: false
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  REPO: ${{ github.repository }}
+  SHOW_PROVIDERS: ${{ vars.SHOW_PROVIDERS || 'false' }}
+
+jobs:
+  update:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          enable-cache: true
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.duckdb/extensions
+          key: duckdb-ext-${{ hashFiles('uv.lock') }}
+      - run: uv sync --frozen
+
+      - name: Update the census state
+        run: |
+          mode="${{ github.event.inputs.mode }}"
+          if [ -z "$mode" ]; then
+            if [ "${{ github.event.schedule }}" = "15 3 * * *" ]; then mode=reconcile; else mode=incremental; fi
+          fi
+          echo "mode: $mode"
+          uv run csb-census "$mode" --state state --repo "$REPO" --threads 4 --memory-limit 10GB
+
+      - name: Build published data
+        run: |
+          args=()
+          if [ "$SHOW_PROVIDERS" = "true" ]; then args+=(--providers); fi
+          if [ -f data/regions/lis.geojson ]; then args+=(--lis-polygon data/regions/lis.geojson); fi
+          uv run csb-census layers --state state --out site/public/data "${args[@]}" --threads 4 --memory-limit 10GB
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: lts/*
+          cache: npm
+          cache-dependency-path: site/package-lock.json
+      - name: Build the site
+        working-directory: site
+        env:
+          VITE_SHOW_PROVIDERS: ${{ env.SHOW_PROVIDERS }}
+        run: npm ci && npm run build
+
+      - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: site/dist
+
+      - name: Keep the schedule alive
+        if: github.event.schedule == '15 3 * * *'
+        run: gh api -X PUT "repos/$REPO/actions/workflows/update.yml/enable"
+
+  deploy:
+    needs: update
+    runs-on: ubuntu-24.04
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1

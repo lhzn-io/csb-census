@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>CSB Census</title>
+    <meta
+      name="description"
+      content="An open, reproducible census of crowdsourced bathymetry published by the IHO Data Centre for Digital Bathymetry."
+    />
+  </head>
+  <body>
+    <main id="map" aria-label="Map of crowdsourced soundings"></main>
+    <aside id="panel">
+      <header>
+        <h1>CSB Census</h1>
+        <p class="lede">
+          Every crowdsourced depth sounding the IHO DCDB has published through NOAA, counted and
+          deduplicated. Updated after each NCEI publication batch.
+        </p>
+      </header>
+      <section id="metrics" aria-live="polite"></section>
+      <section>
+        <h2>Map</h2>
+        <div class="controls" role="radiogroup" aria-label="Map metric">
+          <label><input type="radio" name="metric" value="unique" checked /> Unique soundings</label>
+          <label><input type="radio" name="metric" value="dup" /> Duplicate share</label>
+        </div>
+        <label id="provider-row" class="controls" hidden>
+          Provider label
+          <select id="provider"><option value="">All providers</option></select>
+        </label>
+        <div id="legend"></div>
+        <button id="lis" type="button">Long Island Sound</button>
+        <div id="lis-summary" hidden></div>
+      </section>
+      <section>
+        <h2>By collection month</h2>
+        <div id="chart"></div>
+      </section>
+      <footer>
+        <p>
+          Independent census by Long Horizon Observatory, derived from NOAA NCEI / IHO DCDB public data.
+          Duplicates are measured in NCEI's published archive by provider label; causes are not
+          attributed. Not for navigation.
+          <a href="https://github.com/lhzn-io/csb-census/blob/main/docs/src/methodology.md">Methodology</a>
+          &middot; <a href="https://github.com/lhzn-io/csb-census">Code</a>
+        </p>
+        <p id="built"></p>
+      </footer>
+    </aside>
+    <script type="module" src="./src/main.ts"></script>
+  </body>
+</html>

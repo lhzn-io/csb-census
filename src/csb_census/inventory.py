@@ -1,26 +1,35 @@
-"""Anonymous listing and download of the public DCDB CSB bucket (NOAA Open Data Dissemination)."""
+"""Anonymous listing and download of the public DCDB CSB bucket (NOAA Open Data Dissemination).
 
+Requests reuse one keep-alive HTTPS connection per worker thread: early archive days hold
+thousands of small files, where a TLS handshake per file dominated throughput (about 5 MB/s).
+"""
+
+import hashlib
 import http.client
+import io
 import logging
 import random
 import shutil
+import threading
 import time
 import urllib.error
 import urllib.parse
-import urllib.request
 import xml.etree.ElementTree as ET
 from collections.abc import Callable, Iterator, Sequence
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
+from typing import BinaryIO, Protocol
 
-BUCKET_URL = "https://noaa-dcdb-bathymetry-pds.s3.amazonaws.com/"
+BUCKET_HOST = "noaa-dcdb-bathymetry-pds.s3.amazonaws.com"
+BUCKET_URL = f"https://{BUCKET_HOST}/"
 CSV_PREFIX = "csb/csv/"
 _NS = "{http://s3.amazonaws.com/doc/2006-03-01/}"
 RETRIES = 5
 
 log = logging.getLogger(__name__)
+_local = threading.local()
 
 
 def _with_retries[T](action: Callable[[], T], what: str, *, retries: int = RETRIES) -> T:
@@ -43,11 +52,46 @@ def _with_retries[T](action: Callable[[], T], what: str, *, retries: int = RETRI
     raise AssertionError("unreachable")
 
 
+def _reset_connection() -> None:
+    conn: http.client.HTTPSConnection | None = getattr(_local, "conn", None)
+    if conn is not None:
+        conn.close()
+    _local.conn = None
+
+
+def _http_get(path: str, sink: BinaryIO | None, timeout: float) -> bytes:
+    """GET ``path`` on the bucket over this thread's keep-alive connection.
+
+    Streams the body into ``sink`` (returning b"") or returns it. Any failure drops the
+    connection so the retry starts on a fresh one.
+    """
+    conn: http.client.HTTPSConnection | None = getattr(_local, "conn", None)
+    if conn is None:
+        conn = http.client.HTTPSConnection(BUCKET_HOST, timeout=timeout)
+        _local.conn = conn
+    try:
+        conn.request("GET", path)
+        resp = conn.getresponse()
+        if resp.status >= 400:
+            body = resp.read()
+            raise urllib.error.HTTPError(
+                BUCKET_URL + path.lstrip("/"), resp.status, resp.reason, resp.headers, io.BytesIO(body)
+            )
+        if sink is None:
+            return resp.read()
+        shutil.copyfileobj(resp, sink, 1 << 20)
+        return b""
+    except BaseException:
+        _reset_connection()
+        raise
+
+
 @dataclass(frozen=True)
 class S3Object:
     key: str
     size: int
     last_modified: datetime
+    etag: str = ""
 
     @property
     def url(self) -> str:
@@ -70,20 +114,24 @@ def list_objects(prefix: str = CSV_PREFIX, *, timeout: float = 60) -> Iterator[S
         params = {"list-type": "2", "prefix": prefix}
         if token:
             params["continuation-token"] = token
-        url = BUCKET_URL + "?" + urllib.parse.urlencode(params)
+        path = "/?" + urllib.parse.urlencode(params)
 
-        def page(url: str = url) -> bytes:
-            with urllib.request.urlopen(url, timeout=timeout) as resp:
-                body: bytes = resp.read()
-                return body
+        def page(path: str = path) -> bytes:
+            return _http_get(path, None, timeout)
 
-        root = ET.fromstring(_with_retries(page, f"list {prefix}"))
+        body = _with_retries(page, f"list {prefix}")
+        root = ET.fromstring(body)
         for obj in root.iter(f"{_NS}Contents"):
             key = obj.findtext(f"{_NS}Key") or ""
             if not key.endswith(".csv"):
                 continue
             modified = (obj.findtext(f"{_NS}LastModified") or "").replace("Z", "+00:00")
-            yield S3Object(key, int(obj.findtext(f"{_NS}Size") or 0), datetime.fromisoformat(modified))
+            yield S3Object(
+                key,
+                int(obj.findtext(f"{_NS}Size") or 0),
+                datetime.fromisoformat(modified),
+                (obj.findtext(f"{_NS}ETag") or "").strip('"'),
+            )
         if root.findtext(f"{_NS}IsTruncated") != "true":
             return
         token = root.findtext(f"{_NS}NextContinuationToken")
@@ -103,8 +151,8 @@ def download(
 
         def attempt() -> None:
             # Each attempt rewrites the partial file from the start.
-            with urllib.request.urlopen(obj.url, timeout=timeout) as resp, partial.open("wb") as fh:
-                shutil.copyfileobj(resp, fh, 1 << 20)
+            with partial.open("wb") as fh:
+                _http_get("/" + urllib.parse.quote(obj.key), fh, timeout)
 
         _with_retries(attempt, f"get {obj.key}")
         partial.replace(path)
@@ -112,3 +160,59 @@ def download(
 
     with ThreadPoolExecutor(max_workers=workers) as pool:
         return list(pool.map(fetch, objects))
+
+
+class ObjectSource(Protocol):
+    """Where published CSVs come from: the NOAA bucket in production, a directory in tests and replays."""
+
+    def listing(self, prefix: str) -> Iterator[S3Object]: ...
+
+    def fetch(self, objects: Sequence[S3Object], dest: Path) -> list[Path]: ...
+
+
+@dataclass
+class S3Source:
+    workers: int = 16
+    timeout: float = 120
+
+    def listing(self, prefix: str) -> Iterator[S3Object]:
+        return list_objects(prefix, timeout=self.timeout)
+
+    def fetch(self, objects: Sequence[S3Object], dest: Path) -> list[Path]:
+        return download(objects, dest, workers=self.workers, timeout=self.timeout)
+
+
+@dataclass
+class LocalSource:
+    """A directory laid out like the bucket (``root/csb/csv/YYYY/MM/DD/*.csv``).
+
+    ETags are content MD5s, as S3 reports for single-part uploads. ``fetched`` records every
+    key handed out, so tests can assert what was (and was not) re-read.
+    """
+
+    root: Path
+    fetched: list[str] | None = None
+
+    def listing(self, prefix: str) -> Iterator[S3Object]:
+        for path in sorted(self.root.rglob("*.csv")):
+            key = path.relative_to(self.root).as_posix()
+            if key.startswith(prefix):
+                stat = path.stat()
+                yield S3Object(
+                    key,
+                    stat.st_size,
+                    datetime.fromtimestamp(stat.st_mtime, tz=UTC),
+                    hashlib.md5(path.read_bytes()).hexdigest(),
+                )
+
+    def fetch(self, objects: Sequence[S3Object], dest: Path) -> list[Path]:
+        dest.mkdir(parents=True, exist_ok=True)
+        if self.fetched is None:
+            self.fetched = []
+        paths = []
+        for obj in objects:
+            self.fetched.append(obj.key)
+            target = dest / obj.name
+            shutil.copyfile(self.root / obj.key, target)
+            paths.append(target)
+        return paths

@@ -48,18 +48,74 @@ because an xor cancels out rows repeated within a file. Two files with equal
 fingerprints are whole-file resends. Incremental updates use this to classify
 most duplicates without re-reading earlier files.
 
-## Outputs
+## Backfill outputs
 
 | File | Grain |
 | :--- | :--- |
 | `file_index.parquet` | One row per (file, `UNIQUE_ID`): provider, rows, time and bbox range, fingerprint, ingest time, unique and duplicate counts |
+| `rank/file_counts/<month>.parquet` | (file, `UNIQUE_ID`) within one collection month: rows, unique, resend, cross-platform |
 | `rank/daily/<month>.parquet` | (provider, collection day, H3 resolution 5 cell): rows, unique, resend, cross-platform, platforms |
+| `rank/cells_r9/<month>.parquet` | (provider, collection month, H3 resolution 9 cell): rows, unique, resend, cross-platform |
+
+## Incremental updates
+
+After the backfill, the census follows NCEI's publication batches. Every 6 hours
+(about 40 minutes after each batch) a job:
+
+1. Lists the bucket from a few days before the newest file already counted. New
+   files are (key, ETag) pairs not yet in the index. Each run handles at most a
+   few thousand files, so catching up after an outage is spread over several runs.
+2. Matches each new (file, `UNIQUE_ID`) group's fingerprint against every
+   counted group. A match is a whole-file resend: all of its rows are
+   duplicates, and nothing needs to be re-read.
+3. Ranks every other new row against *candidate* files: earlier files from the
+   same provider label that hold originals and overlap in time and bounding box.
+   Candidates are re-read from the bucket.
+
+Already-counted data always ranks ahead of new data. Online, the original is
+therefore the **first published** copy; in the backfill it is the first
+*ingested* copy. The two differ only when a file appears in the bucket after one
+stamped later than it. Unique totals and map counts do not depend on which copy
+is the original, because every copy shares one key and one position. Only which
+file gets the credit, and the split between resend and cross-platform, can
+differ.
+
+A duplicate whose original came from a **different provider label** is not
+detected online. Across the whole archive there were 4,873 such rows as of
+2026-10-05 (0.0002%). Periodic rebaselines from the full archive recover them.
+
+Once a day, a reconcile run compares the full bucket listing with the index:
+
+- A file that has disappeared is marked removed, and its counts are subtracted.
+  Map counts are subtracted exactly for files from the last 30 days. Otherwise,
+  and whenever a removed file held originals that later copies would inherit,
+  the affected (provider, collection month) pairs are queued for a rebaseline.
+- A file whose ETag has changed is treated as removed and then republished.
+
+## Published data
+
+The dashboard reads static files, so anyone can download and re-check them:
+
+| File | Content |
+| :--- | :--- |
+| `meta.json` | Totals: published, unique, resend, cross-platform, files, provider labels, platform IDs, and the last ingest time |
+| `timeseries_month.json` | The same counts per collection month |
+| `layers/r4`, `r6`, `r8` | All-time H3 cells at resolutions 4, 6 and 8 (finer levels split by parent cell), each with unique and published soundings, duplicate share, provider count, and the first and last collection year |
+| `layers/manifest.json` | Every layer file with its bounding box |
+| `lis/` | Long Island Sound at resolution 9: cells and a yearly coverage summary |
+
+Figures shown per **provider label** describe NCEI's published archive under
+that label. They measure publication, not provider behaviour. A duplicate can
+come from a provider resending data, from an ingest retry, or from a data-centre
+policy, and the census does not attribute the cause.
 
 ## Validation
 
-Before publication, the 6-hourly incremental method is replayed over one month
-and compared with the full backfill for that month. They must agree within 0.01%
-on unique soundings.
+Before publication, the incremental method is replayed over one month of
+publication batches, starting from the census as of the month's first day, and
+compared with the full backfill for that month. They must agree within 0.01% on
+unique soundings. The replay also reports the resend and cross-platform split,
+the bytes re-read and the slowest run, which must finish within 45 minutes.
 
 ## Limitations
 
@@ -69,3 +125,4 @@ on unique soundings.
   This would show up as a sudden drop in duplicate rates.
 - Counts describe what NCEI publishes, which can differ from what providers
   submit.
+- Cross-provider duplicates are found only by rebaselines (see above).

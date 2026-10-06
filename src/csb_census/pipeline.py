@@ -15,16 +15,20 @@ Layout under ``out``::
     stage/files/<batch>.parquet                     per (file, UNIQUE_ID) metadata and fingerprint
     rank/file_counts/<month>.parquet                per (file, UNIQUE_ID) unique/duplicate counts
     rank/daily/<month>.parquet                      per (provider, collection day, H3 r5) counts
+    rank/cells_r9/<month>.parquet                   per (provider, collection month, H3 r9) counts
     file_index.parquet                              finalize: metadata joined with counts
     _done/                                          completion markers (makes every step resumable)
 """
 
+from collections.abc import Sequence
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 
 import duckdb
 
-H3_RES = 5
+H3_RES = 5  # daily time-series grain
+CELL_RES = 9  # map grain; coarser map levels are rolled up from it with h3_cell_to_parent
 
 # Single source of truth for identity. Fields are VARCHAR (read_csv all_varchar), so this hashes
 # DCDB's own rendering; coalesce keeps a missing field from shifting the separators.
@@ -32,6 +36,60 @@ _FIELDS = "concat_ws('|', coalesce(LON, ''), coalesce(LAT, ''), coalesce(DEPTH, 
 SOUNDING_KEY = f"md5_number({_FIELDS})"
 SOUNDING_KEY_LOW64 = f"md5_number_lower({_FIELDS})"
 _TWO_64 = "18446744073709551616::HUGEINT"
+
+# Per-class tallies over a table with a ``class`` column ('unique' | 'dup_resend' | 'dup_cross_id').
+TALLIES = """
+    count(*) AS n_rows,
+    count(*) FILTER (WHERE class = 'unique') AS n_unique,
+    count(*) FILTER (WHERE class = 'dup_resend') AS n_dup_resend,
+    count(*) FILTER (WHERE class = 'dup_cross_id') AS n_dup_cross_id
+"""
+
+
+def h3_cell(res: int) -> str:
+    """H3 cell of a sounding, NULL when its position is unparseable or out of range."""
+    return f"""
+        CASE WHEN try_cast(LAT AS DOUBLE) BETWEEN -90 AND 90
+              AND try_cast(LON AS DOUBLE) BETWEEN -180 AND 180
+             THEN h3_latlng_to_cell(try_cast(LAT AS DOUBLE), try_cast(LON AS DOUBLE), {int(res)})
+        END
+    """
+
+
+def file_meta_sql(table: str) -> str:
+    """Per (file, UNIQUE_ID) metadata and fingerprint over a keyed table (see ``read_keyed``)."""
+    return f"""
+        SELECT file, UNIQUE_ID AS unique_id, any_value(PROVIDER) AS provider,
+               count(*) AS n_rows, min(TIME) AS t_min, max(TIME) AS t_max,
+               min(try_cast(LON AS DOUBLE)) AS lon_min, max(try_cast(LON AS DOUBLE)) AS lon_max,
+               min(try_cast(LAT AS DOUBLE)) AS lat_min, max(try_cast(LAT AS DOUBLE)) AS lat_max,
+               (sum({SOUNDING_KEY_LOW64})::HUGEINT % {_TWO_64})::UBIGINT AS fingerprint,
+               min(ingested) AS ingested
+        FROM {table} GROUP BY file, UNIQUE_ID
+    """
+
+
+def read_keyed(con: duckdb.DuckDBPyConnection, sources: Sequence[Path | str], table: str) -> None:
+    """Read DCDB CSVs as text into temp ``table`` with the sounding key, collection month and ingest stamp.
+
+    The one place identity is computed: stage, incremental and LIS all go through here.
+    """
+    con.execute(
+        f"""
+        CREATE OR REPLACE TEMP TABLE {table} AS
+        SELECT *,
+               {SOUNDING_KEY} AS key,
+               CASE WHEN regexp_matches(TIME, '^[0-9]{{4}}-[0-9]{{2}}-[0-9]{{2}}')
+                    THEN left(TIME, 7) ELSE 'invalid' END AS coll_month,
+               try_strptime(left(file, 14), '%Y%m%d%H%M%S') AS ingested
+        FROM (
+          SELECT UNIQUE_ID, PROVIDER, LON, LAT, DEPTH, TIME,
+                 regexp_extract(filename, '[^/\\\\]+$') AS file
+          FROM read_csv($sources, header = true, all_varchar = true, filename = true)
+        )
+        """,
+        {"sources": [p.as_posix() if isinstance(p, Path) else p for p in sources]},
+    )
 
 
 def connect(
@@ -79,22 +137,7 @@ class StageResult:
 
 def stage(con: duckdb.DuckDBPyConnection, sources: list[Path], out: Path, batch: str) -> StageResult:
     """Pass 1: key every sounding in a batch of CSVs; partition by collection month."""
-    con.execute(
-        f"""
-        CREATE OR REPLACE TEMP TABLE batch AS
-        SELECT *,
-               {SOUNDING_KEY} AS key,
-               CASE WHEN regexp_matches(TIME, '^[0-9]{{4}}-[0-9]{{2}}-[0-9]{{2}}')
-                    THEN left(TIME, 7) ELSE 'invalid' END AS coll_month,
-               try_strptime(left(file, 14), '%Y%m%d%H%M%S') AS ingested
-        FROM (
-          SELECT UNIQUE_ID, PROVIDER, LON, LAT, DEPTH, TIME,
-                 regexp_extract(filename, '[^/\\\\]+$') AS file
-          FROM read_csv($sources, header = true, all_varchar = true, filename = true)
-        )
-        """,
-        {"sources": [p.as_posix() for p in sources]},
-    )
+    read_keyed(con, sources, "batch")
     soundings = out / "stage" / "soundings"
     files_dir = out / "stage" / "files"
     files_dir.mkdir(parents=True, exist_ok=True)
@@ -105,17 +148,7 @@ def stage(con: duckdb.DuckDBPyConnection, sources: list[Path], out: Path, batch:
         """
     )
     con.sql(
-        f"""
-        COPY (
-          SELECT file, UNIQUE_ID AS unique_id, any_value(PROVIDER) AS provider,
-                 count(*) AS n_rows, min(TIME) AS t_min, max(TIME) AS t_max,
-                 min(try_cast(LON AS DOUBLE)) AS lon_min, max(try_cast(LON AS DOUBLE)) AS lon_max,
-                 min(try_cast(LAT AS DOUBLE)) AS lat_min, max(try_cast(LAT AS DOUBLE)) AS lat_max,
-                 (sum({SOUNDING_KEY_LOW64})::HUGEINT % {_TWO_64})::UBIGINT AS fingerprint,
-                 min(ingested) AS ingested
-          FROM batch GROUP BY file, UNIQUE_ID
-        ) TO '{_sql_path(files_dir / f"{batch}.parquet")}' (FORMAT parquet)
-        """
+        f"COPY ({file_meta_sql('batch')}) TO '{_sql_path(files_dir / f'{batch}.parquet')}' (FORMAT parquet)"
     )
     files, rows = con.sql("SELECT count(DISTINCT file), count(*) FROM batch").fetchone() or (0, 0)
     months = tuple(m for (m,) in con.sql("SELECT DISTINCT coll_month FROM batch ORDER BY 1").fetchall())
@@ -131,12 +164,28 @@ def staged_months(out: Path) -> list[str]:
     return sorted(p.name.split("=", 1)[1] for p in root.glob("coll_month=*") if p.is_dir())
 
 
-def rank(con: duckdb.DuckDBPyConnection, out: Path, month: str) -> None:
-    """Pass 2: first-ingested copy wins; classify every later copy. One collection month at a time."""
+def _before_clause(before: datetime | None) -> str:
+    return f"WHERE ingested < TIMESTAMP '{before:%Y-%m-%d %H:%M:%S}'" if before else ""
+
+
+def rank(
+    con: duckdb.DuckDBPyConnection,
+    out: Path,
+    month: str,
+    *,
+    before: datetime | None = None,
+    dest: Path | None = None,
+) -> None:
+    """Pass 2: first-ingested copy wins; classify every later copy. One collection month at a time.
+
+    ``before`` limits the census to files ingested before that instant and ``dest`` redirects the
+    outputs, so the census "as of" a past date can be rebuilt from staged data (validation replay).
+    """
     src = out / "stage" / "soundings" / f"coll_month={month}" / "*.parquet"
-    counts_dir, daily_dir = out / "rank" / "file_counts", out / "rank" / "daily"
-    counts_dir.mkdir(parents=True, exist_ok=True)
-    daily_dir.mkdir(parents=True, exist_ok=True)
+    root = (dest or out) / "rank"
+    counts_dir, daily_dir, cells_dir = root / "file_counts", root / "daily", root / f"cells_r{CELL_RES}"
+    for d in (counts_dir, daily_dir, cells_dir):
+        d.mkdir(parents=True, exist_ok=True)
     con.sql(
         f"""
         CREATE OR REPLACE TEMP TABLE ranked AS
@@ -144,20 +193,14 @@ def rank(con: duckdb.DuckDBPyConnection, out: Path, month: str) -> None:
                CASE WHEN row_number() OVER w = 1 THEN 'unique'
                     WHEN first_value(UNIQUE_ID) OVER w = UNIQUE_ID THEN 'dup_resend'
                     ELSE 'dup_cross_id' END AS class
-        FROM read_parquet('{_sql_path(src)}')
+        FROM (SELECT * FROM read_parquet('{_sql_path(src)}') {_before_clause(before)})
         WINDOW w AS (PARTITION BY key ORDER BY ingested, file
                      ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)
         """
     )
-    tallies = """
-        count(*) AS n_rows,
-        count(*) FILTER (WHERE class = 'unique') AS n_unique,
-        count(*) FILTER (WHERE class = 'dup_resend') AS n_dup_resend,
-        count(*) FILTER (WHERE class = 'dup_cross_id') AS n_dup_cross_id
-    """
     con.sql(
         f"""
-        COPY (SELECT file, UNIQUE_ID AS unique_id, {tallies} FROM ranked GROUP BY ALL)
+        COPY (SELECT file, UNIQUE_ID AS unique_id, {TALLIES} FROM ranked GROUP BY ALL)
         TO '{_sql_path(counts_dir / f"{month}.parquet")}' (FORMAT parquet)
         """
     )
@@ -166,24 +209,33 @@ def rank(con: duckdb.DuckDBPyConnection, out: Path, month: str) -> None:
         COPY (
           SELECT PROVIDER AS provider,
                  CASE WHEN coll_month = 'invalid' THEN NULL ELSE left(TIME, 10) END AS coll_day,
-                 CASE WHEN try_cast(LAT AS DOUBLE) BETWEEN -90 AND 90
-                       AND try_cast(LON AS DOUBLE) BETWEEN -180 AND 180
-                      THEN h3_latlng_to_cell(try_cast(LAT AS DOUBLE), try_cast(LON AS DOUBLE), {H3_RES})
-                 END AS h3_r{H3_RES},
-                 {tallies},
+                 {h3_cell(H3_RES)} AS h3_r{H3_RES},
+                 {TALLIES},
                  count(DISTINCT UNIQUE_ID) AS platforms
           FROM ranked GROUP BY ALL
         ) TO '{_sql_path(daily_dir / f"{month}.parquet")}' (FORMAT parquet)
         """
     )
+    # Map grain. No platform count: distinct counts are not additive across incremental runs.
+    con.sql(
+        f"""
+        COPY (
+          SELECT PROVIDER AS provider, coll_month, {h3_cell(CELL_RES)} AS h3_r{CELL_RES}, {TALLIES}
+          FROM ranked GROUP BY ALL
+        ) TO '{_sql_path(cells_dir / f"{month}.parquet")}' (FORMAT parquet)
+        """
+    )
     con.sql("DROP TABLE ranked")
 
 
-def finalize(con: duckdb.DuckDBPyConnection, out: Path) -> Path:
+def finalize(
+    con: duckdb.DuckDBPyConnection, out: Path, *, before: datetime | None = None, dest: Path | None = None
+) -> Path:
     """Join per-file metadata with counts summed across collection months into ``file_index.parquet``."""
+    root = dest or out
     files = _sql_path(out / "stage" / "files" / "*.parquet")
-    counts = _sql_path(out / "rank" / "file_counts" / "*.parquet")
-    index = out / "file_index.parquet"
+    counts = _sql_path(root / "rank" / "file_counts" / "*.parquet")
+    index = root / "file_index.parquet"
     con.sql(
         f"""
         COPY (
@@ -194,7 +246,8 @@ def finalize(con: duckdb.DuckDBPyConnection, out: Path) -> Path:
             FROM read_parquet('{counts}') GROUP BY ALL
           )
           SELECT f.*, c.n_unique, c.n_dup_resend, c.n_dup_cross_id
-          FROM read_parquet('{files}') f JOIN c USING (file, unique_id)
+          FROM (SELECT * FROM read_parquet('{files}') {_before_clause(before)}) f
+          JOIN c USING (file, unique_id)
           ORDER BY f.ingested, f.file
         ) TO '{_sql_path(index)}' (FORMAT parquet)
         """

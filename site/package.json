@@ -1,0 +1,26 @@
+{
+  "name": "csb-census-site",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "typecheck": "tsc --noEmit",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@deck.gl/core": "9.4.0",
+    "@deck.gl/geo-layers": "9.4.0",
+    "@deck.gl/layers": "9.4.0",
+    "@deck.gl/mapbox": "9.4.0",
+    "h3-js": "4.5.0",
+    "hyparquet": "1.31.2",
+    "maplibre-gl": "5.24.0",
+    "uplot": "1.6.32"
+  },
+  "devDependencies": {
+    "typescript": "7.0.2",
+    "vite": "8.3.2"
+  }
+}
