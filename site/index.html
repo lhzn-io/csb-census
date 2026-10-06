@@ -4,45 +4,101 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>CSB Census</title>
-    <meta
-      name="description"
-      content="An open, reproducible census of crowdsourced bathymetry published by the IHO Data Centre for Digital Bathymetry."
+    <meta name="description" content="An open census of every crowdsourced depth sounding published by the IHO Data Centre for Digital Bathymetry, mapped on the world ocean." />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Josefin+Sans:wght@300;400;600;700&family=Martian+Mono:wght@300;400;500&display=swap"
     />
   </head>
-  <body class="landing">
-    <main>
-      <header>
-        <h1>CSB Census</h1>
-        <p class="lede">
-          An open census of crowdsourced bathymetry: every depth sounding the IHO Data Centre for
-          Digital Bathymetry has published through NOAA, counted, deduplicated and mapped, and kept
-          current after each publication batch.
-        </p>
-      </header>
-      <div class="cards">
-        <a class="card" href="archive.html">
-          <h2>Full archive</h2>
-          <p>Everything published since the archive began, by place: soundings, vessel-days and duplicates.</p>
-          <div class="figures" id="archive-figures"></div>
-          <span class="go">Explore the archive &rarr;</span>
-        </a>
-        <a class="card" href="recent.html">
-          <h2>Recent activity</h2>
-          <p>What came in today, this week and this month, where boats have been, and how long data takes to appear.</p>
-          <div class="figures" id="recent-figures"></div>
-          <span class="go">See recent activity &rarr;</span>
-        </a>
+  <body class="hz landing-sp">
+    <header class="mast">
+      <a class="wordmark" href="./" aria-label="CSB Census home">
+        <span class="wm-top">CSB</span>
+        <span class="wm-bottom">CENSUS</span>
+      </a>
+      <div class="reflection-wrap">
+        <svg class="reflection" id="reflection" role="img"></svg>
+        <span class="reflection-title"></span>
       </div>
-      <footer>
-        <p>
-          Independent census by Long Horizon Observatory, derived from NOAA NCEI / IHO DCDB public data.
-          Not for navigation.
-          <a href="https://github.com/lhzn-io/csb-census/blob/main/docs/src/methodology.md">Methodology</a>
-          &middot; <a href="https://github.com/lhzn-io/csb-census">Code</a>
+      <p class="mast-note">An open census of every crowdsourced depth sounding published by the <a href="https://iho.int/en/data-centre-for-digital-bathymetry">IHO DCDB</a>.</p>
+      <nav class="tabs" aria-label="View controls">
+        <div class="tabgroup">
+          <span class="tabgroup-label">View</span>
+          <div class="tabgroup-row">
+            <a class="tab" href="archive.html">Archive</a>
+            <a class="tab" href="recent.html">Recent</a>
+          </div>
+        </div>
+        <div class="tabgroup" role="radiogroup" aria-label="Show">
+          <span class="tabgroup-label">Show</span>
+          <div class="tabgroup-row">
+            <label class="tab"><input type="radio" name="metric" value="unique" checked />Soundings</label>
+            <label class="tab"><input type="radio" name="metric" value="vessels" />Vessel-days</label>
+          </div>
+        </div>
+        <div class="tabgroup">
+          <span class="tabgroup-label">Period</span>
+          <div class="tabgroup-row"><span class="tab static">All time</span></div>
+        </div>
+      </nav>
+    </header>
+
+    <main class="sp-main">
+
+
+      <section class="sp-side">
+        <h1 class="sp-title">The world ocean,<br />sounded by<br />the crowd</h1>
+        <p class="sp-lede">
+          Every depth sounding volunteers and partners have shared through the <a href="https://iho.int/">IHO</a>'s
+          <a href="https://iho.int/en/crowdsourced-bathymetry">Crowdsourced Bathymetry</a> initiative and its <a href="https://iho.int/en/data-centre-for-digital-bathymetry">Data Centre for Digital Bathymetry</a>,
+          counted, deduplicated and mapped, and kept current as <a href="https://www.ncei.noaa.gov/">NOAA NCEI</a> publishes each batch to
+          the <a href="https://registry.opendata.aws/noaa-dcdb-bathymetry-pds/">open archive</a>. Browse the raw soundings in the <a href="https://www.ncei.noaa.gov/maps/iho_dcdb/">DCDB data viewer</a>.
         </p>
-        <p id="built"></p>
-      </footer>
+        <div class="sp-figures" id="sp-figures"></div>
+        <div class="sp-ladder" id="ladder"></div>
+        <nav class="sp-cards" aria-label="Explore">
+          <a class="sp-card" href="archive.html">
+            <span class="sp-card-tag">Full archive</span>
+            <span class="sp-card-text">Everything published since 2017, by place: soundings, vessel-days and duplicates.</span>
+            <span class="sp-card-go">Open the chart &rarr;</span>
+          </a>
+          <a class="sp-card" href="recent.html">
+            <span class="sp-card-tag">Recent activity</span>
+            <span class="sp-card-text" id="recent-text">What came in today, this week and this month, and where boats have been.</span>
+            <span class="sp-card-go">Open the log &rarr;</span>
+          </a>
+        </nav>
+        <p class="note">
+          Independent census by <a href="https://longhorizon.eco/">Long Horizon Observatory</a> from <a href="https://www.ncei.noaa.gov/">NOAA NCEI</a> /
+          <a href="https://iho.int/en/data-centre-for-digital-bathymetry">IHO DCDB</a> public data. Cells: <a href="https://h3geo.org/">H3</a>. Land: <a href="https://www.naturalearthdata.com/">Natural Earth</a>. Not for
+          navigation. <a href="https://github.com/lhzn-io/csb-census/blob/main/docs/src/methodology.md">Methodology</a> &middot; <a href="https://github.com/lhzn-io/csb-census">Code</a>
+        </p>
+      </section>
+
+      <figure class="sp-chart" id="sp-chart">
+        <canvas id="sp-canvas" role="img" aria-label="Every cell of the archive on a map of the world ocean"></canvas>
+        <figcaption class="sp-caption">
+          <span id="sp-caption-text"></span>
+        </figcaption>
+        <div class="sp-tip" id="sp-tip" hidden></div>
+        <button class="center-tab" id="center-tab" type="button" aria-expanded="false" aria-controls="center-drawer">Center</button>
+      </figure>
     </main>
+
+    <aside class="center-drawer" id="center-drawer" hidden>
+      <h2>Center</h2>
+      <p class="note">The whole world ocean in one square. Choose where the square is centered.</p>
+      <div class="center-options" role="radiogroup" aria-label="Center of the map">
+        <label><input type="radio" name="center" value="spilhaus" checked /><b>Classic</b><span>southern Indian Ocean</span></label>
+        <label><input type="radio" name="center" value="americas" /><b>Americas</b><span>15°N 75°W</span></label>
+        <label><input type="radio" name="center" value="atlantic" /><b>Atlantic</b><span>40°N 45°W</span></label>
+        <label><input type="radio" name="center" value="pacific" /><b>Pacific</b><span>15°N 165°W</span></label>
+      </div>
+      <p class="note">The first visit starts on the center nearest your time zone.</p>
+    </aside>
+
     <script type="module" src="./src/landing.ts"></script>
   </body>
 </html>

@@ -22,7 +22,7 @@ export interface MapViewOptions {
   pool: () => Tile[];
   color: (cell: Cell, res: number) => RGBA;
   tooltip: (cell: Cell) => string;
-  /** Changes whenever `color` would give different results, so deck.gl recolours. */
+  /** Changes whenever `color` would give different results, so deck.gl recolors. */
   colorKey: () => unknown;
   /** Extra layers drawn above the hexagons (for example the Long Island Sound r9 layer). */
   extra?: (zoom: number, hex: (id: string, data: Cell[], res: number) => Layer) => Layer[];
@@ -61,7 +61,8 @@ export function createMapView(opts: MapViewOptions): MapView {
   map.addControl(
     new AttributionControl({
       compact: true,
-      customAttribution: "Census: Long Horizon Observatory, from NOAA NCEI / IHO DCDB data. Not for navigation.",
+      customAttribution:
+        'Census: <a href="https://longhorizon.eco/">Long Horizon Observatory</a>, from <a href="https://www.ncei.noaa.gov/">NOAA NCEI</a> / <a href="https://iho.int/en/data-centre-for-digital-bathymetry">IHO DCDB</a> data. Not for navigation.',
     }),
   );
   const overlay = new MapboxOverlay({ interleaved: true, layers: [] });

@@ -2,7 +2,7 @@ export type RGBA = [number, number, number, number];
 type Stop = [number, [number, number, number]];
 
 // Counts: muted dark purple through blues into green (monotonic in lightness, so it reads in
-// greyscale and for most colour-vision types); a warm ramp for duplicate share.
+// grayscale and for most color-vision types); a warm ramp for duplicate share.
 const COUNTS: Stop[] = [
   [0, [84, 62, 122]],
   [0.25, [72, 88, 168]],

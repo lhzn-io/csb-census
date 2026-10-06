@@ -11,7 +11,7 @@ Two products:
   has. That table is the hook for comparing crowdsourced depths with surveys after tide
   reduction; it joins on the sounding key.
 
-A sounding falls inside the region when its H3 cell (r9 or r10) has its centre inside the
+A sounding falls inside the region when its H3 cell (r9 or r10) has its center inside the
 polygon (H3's polyfill rule), so edges are resolved to about one cell (174 m at r9, 66 m at r10).
 """
 

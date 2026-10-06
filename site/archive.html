@@ -4,57 +4,117 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>CSB Census: Full Archive</title>
-    <meta
-      name="description"
-      content="Every crowdsourced depth sounding the IHO Data Centre for Digital Bathymetry has published, counted, deduplicated and mapped."
+    <meta name="description" content="Every crowdsourced depth sounding the IHO Data Centre for Digital Bathymetry has published, counted, deduplicated and mapped." />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Josefin+Sans:wght@300;400;600;700&family=Martian+Mono:wght@300;400;500&display=swap"
     />
   </head>
-  <body class="map-page">
-    <main id="map" aria-label="Map of crowdsourced soundings"></main>
-    <aside id="panel">
-      <nav class="crumbs"><a href="./">CSB Census</a> / Full archive &middot; <a href="recent.html">Recent activity</a></nav>
-      <header>
-        <h1>Full archive</h1>
-        <p class="lede">
-          Every crowdsourced depth sounding the IHO DCDB has published through NOAA, counted and
-          deduplicated. Updated after each NCEI publication batch.
-        </p>
-      </header>
-      <section id="metrics" aria-live="polite"></section>
-      <section>
-        <h2>Map</h2>
-        <div class="controls" role="radiogroup" aria-label="Map metric">
-          <label><input type="radio" name="metric" value="unique" checked /> Unique soundings</label>
-          <label><input type="radio" name="metric" value="vessels" /> Vessel-days</label>
-          <label><input type="radio" name="metric" value="dup" /> Duplicate share</label>
+  <body class="hz">
+    <header class="mast">
+      <a class="wordmark" href="./" aria-label="CSB Census home">
+        <span class="wm-top">CSB</span>
+        <span class="wm-bottom">CENSUS</span>
+      </a>
+      <div class="reflection-wrap">
+        <svg class="reflection" id="reflection" role="img"></svg>
+        <span class="reflection-title"></span>
+      </div>
+      <p class="mast-note" id="mast-note">Every crowdsourced sounding the <a href="https://iho.int/en/data-centre-for-digital-bathymetry">IHO DCDB</a> has published, counted and deduplicated.</p>
+      <nav class="tabs" aria-label="View controls">
+        <div class="tabgroup">
+          <span class="tabgroup-label">View</span>
+          <div class="tabgroup-row">
+            <span class="tab active" aria-current="page">Archive</span>
+            <a class="tab" href="recent.html">Recent</a>
+          </div>
         </div>
-        <div class="controls" role="radiogroup" aria-label="Basemap">
-          <label><input type="radio" name="basemap" value="dark" checked /> Dark basemap</label>
-          <label><input type="radio" name="basemap" value="light" /> Light basemap</label>
+        <div class="tabgroup" role="radiogroup" aria-label="Map">
+          <span class="tabgroup-label">Map</span>
+          <div class="tabgroup-row">
+            <label class="tab"><input type="radio" name="metric" value="unique" checked />Soundings</label>
+            <label class="tab"><input type="radio" name="metric" value="vessels" />Vessel-days</label>
+            <label class="tab"><input type="radio" name="metric" value="dup" />Duplicates</label>
+          </div>
         </div>
-        <label id="provider-row" class="controls" hidden>
-          Provider label
-          <select id="provider"><option value="">All providers</option></select>
-        </label>
-        <div id="legend"></div>
+        <div class="tabgroup" role="radiogroup" aria-label="Chart">
+          <span class="tabgroup-label">Chart</span>
+          <div class="tabgroup-row">
+            <label class="tab"><input type="radio" name="basemap" value="dark" checked />Night</label>
+            <label class="tab"><input type="radio" name="basemap" value="light" />Day</label>
+          </div>
+        </div>
+      </nav>
+    </header>
+
+    <main class="chart">
+      <div id="map" aria-label="Map of the full archive"></div>
+      <div class="neat" aria-hidden="true">
+        <div class="ticks ticks-top" id="ticks-top"></div>
+        <div class="ticks ticks-bottom" id="ticks-bottom"></div>
+        <div class="ticks ticks-left" id="ticks-left"></div>
+        <div class="ticks ticks-right" id="ticks-right"></div>
+      </div>
+      <aside class="ladder" id="ladder" aria-label="Legend"></aside>
+      <output class="cursor" id="cursor" aria-live="off">--</output>
+      <nav class="bookmarks" aria-label="Bookmarks">
+        <span class="bookmarks-label">Bookmarks</span>
         <button id="lis" type="button">Long Island Sound</button>
-        <div id="lis-summary" hidden></div>
+      </nav>
+    </main>
+
+    <section class="band" aria-label="The archive">
+      <div class="readouts" id="readouts"></div>
+      <figure class="horizon">
+        <figcaption>
+          <span class="cap-label">Soundings per collection month</span>
+          <span class="clock"><span class="swatch-line"></span>unique <span class="swatch-line faint"></span>published</span>
+          <span class="hover" id="horizon-hover"></span>
+        </figcaption>
+        <div class="plot">
+          <svg id="horizon" preserveAspectRatio="none" role="img" aria-label="Soundings per collection month"></svg>
+          <div class="plot-labels" id="horizon-labels" aria-hidden="true"></div>
+        </div>
+      </figure>
+      <figure class="batches">
+        <figcaption><span class="cap-label">What was published, by year</span></figcaption>
+        <div class="plot">
+          <svg id="batches" preserveAspectRatio="none" role="img" aria-label="Unique and duplicate shares by collection year"></svg>
+          <div class="plot-labels" id="batches-labels" aria-hidden="true"></div>
+        </div>
+        <div class="batch-key"><i class="k-uni"></i>unique <i class="k-pub"></i>resent <i class="k-cross"></i>other ID</div>
+      </figure>
+    </section>
+
+    <button class="logbook-tab" id="logbook-tab" type="button" aria-expanded="false" aria-controls="logbook">Logbook</button>
+    <aside class="logbook" id="logbook" hidden>
+      <h2>Logbook</h2>
+      <section>
+        <h3>The archive</h3>
+        <div id="totals"></div>
+      </section>
+      <section id="lis-section" hidden>
+        <h3>Long Island Sound</h3>
+        <div id="lis-summary"></div>
       </section>
       <section>
-        <h2>By collection month</h2>
-        <div id="chart"></div>
-      </section>
-      <footer>
-        <p>
-          Independent census by Long Horizon Observatory, derived from NOAA NCEI / IHO DCDB public data.
-          Duplicates are measured in NCEI's published archive by provider label; causes are not
-          attributed. A vessel-day is one platform ID collecting in a cell on one day. Not for navigation.
-          <a href="https://github.com/lhzn-io/csb-census/blob/main/docs/src/methodology.md">Methodology</a>
-          &middot; <a href="https://github.com/lhzn-io/csb-census">Code</a>
+        <h3>How it is counted</h3>
+        <p class="note">
+          A sounding's identity is its position, depth and time exactly as DCDB publishes them. The first
+          copy published is the original; later copies are duplicates, either resent under the same platform ID
+          or repeated under another. A vessel-day is one platform ID in one cell on one day, and copies under
+          another ID add none. Duplicates are measured in NCEI's published archive; causes are not attributed.
         </p>
-        <p id="built"></p>
-      </footer>
+      </section>
+      <p class="note">
+        Independent census by <a href="https://longhorizon.eco/">Long Horizon Observatory</a> from <a href="https://www.ncei.noaa.gov/">NOAA NCEI</a> /
+        <a href="https://iho.int/en/data-centre-for-digital-bathymetry">IHO DCDB</a> public data, also browsable in the <a href="https://www.ncei.noaa.gov/maps/iho_dcdb/">DCDB data viewer</a>. Not for
+        navigation. <a href="https://github.com/lhzn-io/csb-census/blob/main/docs/src/methodology.md">Methodology</a> &middot; <a href="https://github.com/lhzn-io/csb-census">Code</a>
+      </p>
     </aside>
-    <script type="module" src="./src/main.ts"></script>
+
+    <script type="module" src="./src/archive.ts"></script>
   </body>
 </html>

@@ -52,6 +52,6 @@ export function epochs(t: Table, name: string): number[] {
 
 export function hours(h: number | null): string {
   if (h == null) return "-";
-  if (h < 48) return `${h.toFixed(h < 10 ? 1 : 0)} h`;
-  return `${(h / 24).toFixed(h < 240 ? 1 : 0)} d`;
+  if (h < 48) return `${h.toFixed(h < 10 ? 1 : 0)}h`;
+  return `${(h / 24).toFixed(h < 240 ? 1 : 0)}d`;
 }

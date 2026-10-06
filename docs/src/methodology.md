@@ -44,7 +44,7 @@ ISO date go to an `invalid` partition. They are counted, but not mapped.
 
 A sounding count mostly reflects how long a logger ran and how fast its
 echosounder pings: one boat logging at the dock for a season can outweigh a busy
-harbour. To show where the crowd is, the census also counts **vessel-days**.
+harbor. To show where the crowd is, the census also counts **vessel-days**.
 
 - A **platform** is a `UNIQUE_ID`, the only vessel identifier the archive carries.
 - A vessel-day is one platform collecting in one place (an H3 resolution 8 cell,
@@ -133,11 +133,12 @@ The dashboard reads static files, so anyone can download and re-check them:
 | `layers/r4`, `r6`, `r8` | All-time H3 cells at resolutions 4, 6 and 8 (finer levels split by parent cell), each with unique and published soundings, duplicate share, provider count, the first and last collection year, vessel-days and platforms |
 | `layers/recent/7d`, `30d`, `365d` | Vessel-days and platforms per cell for soundings collected in the last 7, 30 or 365 days (the 365-day window stops at resolution 6) |
 | `layers/manifest.json` | Every layer file with its bounding box |
+| `spilhaus/<center>/cells.json` | The resolution 4 layer projected into the world-ocean square of the landing page: Athelstan Spilhaus's aspect of Adams' world in a square (`classic`), and the same projection centered on the Americas, the Atlantic and the Pacific. Static land masks for each center (Natural Earth 1:50m) ship with the site |
 | `lis/` | Long Island Sound at resolution 9: cells and a yearly coverage summary |
 
 Figures shown per **provider label** describe NCEI's published archive under
-that label. They measure publication, not provider behaviour. A duplicate can
-come from a provider resending data, from an ingest retry, or from a data-centre
+that label. They measure publication, not provider behavior. A duplicate can
+come from a provider resending data, from an ingest retry, or from a data-center
 policy, and the census does not attribute the cause.
 
 ## Validation

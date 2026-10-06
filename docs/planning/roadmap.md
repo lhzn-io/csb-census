@@ -21,6 +21,9 @@
 - [x] Duplicate-share view; provider views behind a build switch
 - [x] Vessel-days (distinct platform and collection day per cell) as a map metric, in the state and layers
 - [x] Landing page; recent-activity page (publication windows, 6-hourly batches, daily series, lag, recent-window map); dark basemap
+- [x] Chart-room redesign in the Long Horizon brand (Josefin Sans, slate horizon band, hanging tabs, logbook drawer)
+- [x] Landing page on the world-ocean square (Spilhaus, plus Americas, Atlantic and Pacific centers; nearest by time zone)
+- [x] Public preview on Cloudflare Pages, deployed from garnet after each dry-run layers build
 - [ ] Map that follows any range brushed on the daily chart (needs layers partitioned by collection year)
 - [ ] Long Island Sound polygon, resolution 9 and 10 layers, coverage summary
 - [ ] Go live on GitHub Pages (after the DCDB/CIRES heads-up)

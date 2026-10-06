@@ -1,4 +1,4 @@
-"""S3 client behaviour with the network and the clock faked, plus the local source used in tests."""
+"""S3 client behavior with the network and the clock faked, plus the local source used in tests."""
 
 import http.client
 import io
