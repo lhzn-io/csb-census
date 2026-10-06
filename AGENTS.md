@@ -26,10 +26,10 @@ It is the community-measurement companion to `lhzn-io/csb-trusted-node`.
 | `src/csb_census/pipeline.py` | `read_keyed`, `stage` (pass 1), `rank` (pass 2), `finalize`. The identity SQL is defined only here |
 | `src/csb_census/state.py` | Versioned state (Parquet tables plus manifest), mirrored to the `state` release with a generation check |
 | `src/csb_census/incremental.py` | `seed`, `run` (6-hourly), `reconcile` (daily), `AsOfSource` for replays |
-| `src/csb_census/layers.py` | Published dashboard data: H3 layers, manifest, `meta.json`, `timeseries_month.json` |
+| `src/csb_census/layers.py` | Published dashboard data: H3 layers (with vessel-days), recent-window layers, manifest, `meta.json`, `timeseries_month.json`, `recent.json` |
 | `src/csb_census/lis.py` | Regional analysis (Long Island Sound): r9 layer and summary; `extract` of originals at r10 on garnet |
 | `src/csb_census/cli.py` | `backfill`, `rank`, `seed`, `incremental`, `reconcile`, `replay`, `state pull/push`, `layers`, `lis extract` |
-| `site/` | Dashboard (Vite + TypeScript, MapLibre 5, deck.gl 9, hyparquet). Data in `site/public/data` (gitignored) |
+| `site/` | Dashboard (Vite + TypeScript, MapLibre 5, deck.gl 9, hyparquet). Three pages: `index.html` (landing, `src/landing.ts`), `archive.html` (`src/main.ts`) and `recent.html` (`src/recent.ts`); both map pages build on `src/mapview.ts`. Data in `site/public/data` (gitignored) |
 | `.github/workflows/update.yml` | 6-hourly incremental, daily reconcile, Pages deploy. **Schedule stays commented out until launch** |
 | `docs/src/methodology.md` | The public definition of the census. Keep it in sync with `pipeline.py` and `incremental.py` |
 | `tests/synthetic.py` | The synthetic archive (files A to H) covering every duplicate pattern; shared by most tests |

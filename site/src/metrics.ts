@@ -11,6 +11,8 @@ export interface Meta {
   files: number;
   providers: number;
   platforms: number;
+  vessel_days?: number;
+  platforms_active_30d?: number;
   provider_views: boolean;
 }
 

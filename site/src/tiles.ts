@@ -1,14 +1,20 @@
 import { asyncBufferFromUrl, parquetReadObjects } from "hyparquet";
 import { DATA } from "./config";
 
+/**
+ * One hexagon. Archive layers carry every field; window layers (recent vessel-days) carry
+ * h3, vessel_days, platforms, n_unique and n_published only.
+ */
 export interface Cell {
   h3: string;
   n_unique: number;
   n_published: number;
-  dup_share: number;
-  n_providers: number;
-  first_year: number;
-  last_year: number;
+  vessel_days: number;
+  platforms: number;
+  dup_share?: number;
+  n_providers?: number;
+  first_year?: number;
+  last_year?: number;
 }
 
 export interface Tile {
@@ -22,10 +28,9 @@ export interface Tile {
 
 export interface LayerManifest {
   tiles: Tile[];
+  windows?: Record<string, Tile[]>;
   providers?: Record<string, Tile[]>;
 }
-
-const COLUMNS = ["h3", "n_unique", "n_published", "dup_share", "n_providers", "first_year", "last_year"];
 
 export async function loadManifest(): Promise<LayerManifest> {
   const res = await fetch(`${DATA}/layers/manifest.json`);
@@ -51,16 +56,12 @@ export function readCells(path: string): Promise<Cell[]> {
   }
   const load = (async () => {
     const file = await asyncBufferFromUrl({ url });
-    const rows = await parquetReadObjects({ file, columns: COLUMNS });
-    return rows.map((r) => ({
-      h3: String(r.h3),
-      n_unique: toNumber(r.n_unique),
-      n_published: toNumber(r.n_published),
-      dup_share: toNumber(r.dup_share),
-      n_providers: toNumber(r.n_providers),
-      first_year: toNumber(r.first_year),
-      last_year: toNumber(r.last_year),
-    }));
+    const rows = await parquetReadObjects({ file });
+    return rows.map((r) => {
+      const cell: Record<string, unknown> = {};
+      for (const [k, v] of Object.entries(r)) if (k !== "part") cell[k] = k === "h3" ? String(v) : toNumber(v);
+      return cell as unknown as Cell;
+    });
   })();
   cache.set(url, load);
   if (cache.size > CACHE_LIMIT) cache.delete(cache.keys().next().value as string);

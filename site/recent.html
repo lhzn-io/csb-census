@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>CSB Census: Recent Activity</title>
+    <meta
+      name="description"
+      content="What the IHO DCDB published in the last day, week and month, and where crowdsourced bathymetry was collected."
+    />
+  </head>
+  <body class="map-page">
+    <main id="map" aria-label="Map of recent vessel-days"></main>
+    <aside id="panel">
+      <nav class="crumbs"><a href="./">CSB Census</a> / Recent activity &middot; <a href="archive.html">Full archive</a></nav>
+      <header>
+        <h1>Recent activity</h1>
+        <p class="lede">
+          What NCEI published lately, by publication time, and where boats collected, by collection
+          day. Refreshed after each publication batch.
+        </p>
+      </header>
+      <section>
+        <h2>Published (by publication time)</h2>
+        <div id="strip" aria-live="polite"></div>
+      </section>
+      <section>
+        <h2>Map: vessel-days (by collection day)</h2>
+        <div class="controls" role="radiogroup" aria-label="Window">
+          <label><input type="radio" name="window" value="7d" /> 7 days</label>
+          <label><input type="radio" name="window" value="30d" checked /> 30 days</label>
+          <label><input type="radio" name="window" value="365d" /> 12 months</label>
+        </div>
+        <div class="controls" role="radiogroup" aria-label="Basemap">
+          <label><input type="radio" name="basemap" value="dark" checked /> Dark basemap</label>
+          <label><input type="radio" name="basemap" value="ocean" /> Ocean basemap</label>
+        </div>
+        <div id="legend"></div>
+      </section>
+      <section>
+        <h2>Publication batches, last 30 days</h2>
+        <div id="batches"></div>
+      </section>
+      <section>
+        <h2>Daily, last 400 days</h2>
+        <div class="controls" role="radiogroup" aria-label="Clock">
+          <label><input type="radio" name="clock" value="pub" checked /> By publication day</label>
+          <label><input type="radio" name="clock" value="coll" /> By collection day</label>
+        </div>
+        <div id="daily"></div>
+        <p class="hint">Drag across the chart to zoom into a range; double-click to zoom out.</p>
+      </section>
+      <section>
+        <h2>Publication lag</h2>
+        <div class="controls" role="radiogroup" aria-label="Lag period">
+          <label><input type="radio" name="lag" value="30d" checked /> Last 30 days</label>
+          <label><input type="radio" name="lag" value="all" /> All time</label>
+        </div>
+        <div id="lag"></div>
+        <p class="hint">Time from a file's newest sounding to its publication, per file and platform.</p>
+      </section>
+      <section>
+        <h2>Census runs</h2>
+        <div id="runs"></div>
+      </section>
+      <footer>
+        <p>
+          Independent census by Long Horizon Observatory, derived from NOAA NCEI / IHO DCDB public data.
+          A vessel-day is one platform ID collecting in a cell on one day; data repeated under another
+          platform ID adds none. Not for navigation.
+          <a href="https://github.com/lhzn-io/csb-census/blob/main/docs/src/methodology.md">Methodology</a>
+          &middot; <a href="https://github.com/lhzn-io/csb-census">Code</a>
+        </p>
+        <p id="built"></p>
+      </footer>
+    </aside>
+    <script type="module" src="./src/recent.ts"></script>
+  </body>
+</html>

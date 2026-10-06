@@ -1,13 +1,14 @@
 export type RGBA = [number, number, number, number];
 type Stop = [number, [number, number, number]];
 
-// Cividis (colour-vision friendly) for counts; a warm ramp for duplicate share.
-const CIVIDIS: Stop[] = [
-  [0, [0, 34, 78]],
-  [0.25, [65, 77, 107]],
-  [0.5, [124, 123, 120]],
-  [0.75, [188, 175, 111]],
-  [1, [254, 232, 56]],
+// Counts: muted dark purple through blues into green (monotonic in lightness, so it reads in
+// greyscale and for most colour-vision types); a warm ramp for duplicate share.
+const COUNTS: Stop[] = [
+  [0, [84, 62, 122]],
+  [0.25, [72, 88, 168]],
+  [0.5, [46, 132, 200]],
+  [0.75, [36, 170, 160]],
+  [1, [124, 212, 112]],
 ];
 const DUP: Stop[] = [
   [0, [255, 247, 236]],
@@ -36,9 +37,10 @@ function ramp(stops: Stop[], t: number, alpha: number): RGBA {
   return [last[0], last[1], last[2], alpha];
 }
 
-/** Log-scaled unique soundings: 1 to 10^maxExp maps across the ramp. */
+/** Log-scaled unique soundings: 1 to 10^maxExp maps across the ramp; sparse cells fade into the basemap. */
 export function uniqueColor(n: number, maxExp: number): RGBA {
-  return ramp(CIVIDIS, Math.log10(Math.max(1, n)) / maxExp, 210);
+  const t = Math.min(1, Math.log10(Math.max(1, n)) / maxExp);
+  return ramp(COUNTS, t, Math.round(45 + 190 * t));
 }
 
 export function dupColor(share: number): RGBA {
@@ -46,6 +48,42 @@ export function dupColor(share: number): RGBA {
 }
 
 export function legendGradient(kind: "unique" | "dup"): string {
-  const stops = kind === "unique" ? CIVIDIS : DUP;
+  const stops = kind === "unique" ? COUNTS : DUP;
   return `linear-gradient(to right, ${stops.map(([t, c]) => `rgb(${c.join(",")}) ${t * 100}%`).join(", ")})`;
+}
+
+/**
+ * Discrete bins for vessel-days, read like a legend people can quote ("100+ vessel-days").
+ * Lower bins are more transparent, so sparse cells recede into the basemap.
+ */
+export interface Bins {
+  edges: number[]; // lower bound of each bin; the last one is open-ended
+  label: string;
+}
+
+export const ARCHIVE_BINS: Bins = { edges: [1, 10, 100, 1000], label: "vessel-days per cell" };
+export const RECENT_BINS: Bins = { edges: [1, 3, 10, 30], label: "vessel-days per cell in the window" };
+
+const BIN_ALPHA = [80, 140, 200, 240];
+
+function binIndex(n: number, edges: number[]): number {
+  let i = 0;
+  while (i + 1 < edges.length && n >= edges[i + 1]) i++;
+  return i;
+}
+
+export function binColor(n: number, bins: Bins): RGBA {
+  const i = binIndex(n, bins.edges);
+  return ramp(COUNTS, i / (bins.edges.length - 1), BIN_ALPHA[i]);
+}
+
+/** Legend chips: one swatch per bin, labelled with its lower bound ("1000+" for the last). */
+export function binChips(bins: Bins): string {
+  return bins.edges
+    .map((edge, i) => {
+      const [r, g, b, a] = ramp(COUNTS, i / (bins.edges.length - 1), BIN_ALPHA[i]);
+      const text = i === bins.edges.length - 1 ? `${edge.toLocaleString("en")}+` : edge.toLocaleString("en");
+      return `<span class="chip" style="background:rgba(${r},${g},${b},${a / 255})">${text}</span>`;
+    })
+    .join("");
 }

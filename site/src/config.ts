@@ -11,3 +11,6 @@ export const RES_FOR_ZOOM = (zoom: number): 4 | 6 | 8 => (zoom < 5 ? 4 : zoom < 
 
 export const ESRI_ATTRIBUTION =
   "Basemap: Esri, GEBCO, NOAA, National Geographic, Garmin, HERE, Geonames.org, and other contributors";
+
+export const ESRI_DARK_ATTRIBUTION =
+  "Basemap: Esri, HERE, Garmin, &copy; OpenStreetMap contributors, and the GIS user community";
