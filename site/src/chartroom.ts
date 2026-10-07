@@ -100,6 +100,31 @@ export function renderReflection(values: number[], label: string): void {
   if (title) title.textContent = label;
 }
 
+/** The favicon: the same seven-batch reflection, tiny, on a night tile. public/favicon.svg is a static fallback. */
+export function faviconSvg(values: number[]): string {
+  const max = Math.max(1, ...values);
+  const bars = values
+    .slice(0, 7)
+    .map((v, i) => {
+      const y = (5.5 + i * 3.5).toFixed(1);
+      const w = 6 + 20 * Math.sqrt(v / max);
+      return `<line x1="4" x2="${(4 + w).toFixed(1)}" y1="${y}" y2="${y}" stroke="${YELLOW}" stroke-width="${(2.2 - i * 0.12).toFixed(2)}" stroke-opacity="${(1 - i * 0.09).toFixed(2)}"/>`;
+    })
+    .join("");
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="6" fill="#111"/>${bars}</svg>`;
+}
+
+export function setFavicon(values: number[]): void {
+  let link = document.querySelector<HTMLLinkElement>('link[rel="icon"]');
+  if (!link) {
+    link = document.createElement("link");
+    link.rel = "icon";
+    document.head.append(link);
+  }
+  link.type = "image/svg+xml";
+  link.href = `data:image/svg+xml,${encodeURIComponent(faviconSvg(values))}`;
+}
+
 /* ---------- Horizon band ---------- */
 
 export function renderReadouts(items: [string, string, string][]): void {
@@ -259,14 +284,19 @@ function ago(iso: string): string {
   return h < 48 ? `${h} h ago` : `${Math.round(h / 24)} days ago`;
 }
 
+/** The strip at the top of every page; the "ago" keeps counting while the page stays open. */
 export function renderUpdated(meta: Freshness): void {
   const at = meta.built_at.slice(0, 16).replace("T", " ");
-  const parts = [`<b>Updated</b> ${at} UTC <span class="ago">(${ago(meta.built_at)})</span>`];
-  if (meta.last_latency_min != null) {
-    const typical = meta.median_latency_min_30d != null ? `, typically ${meta.median_latency_min_30d} min` : "";
-    parts.push(`NCEI's latest batch reached the census ${meta.last_latency_min} min after it was published${typical}`);
-  }
-  $("updated").innerHTML = parts.join(" · ");
+  const draw = (): void => {
+    const parts = [`<b>Updated</b>${at} UTC <span class="ago">(${ago(meta.built_at)})</span>`];
+    if (meta.last_latency_min != null) {
+      const typical = meta.median_latency_min_30d != null ? `, typically ${meta.median_latency_min_30d} min` : "";
+      parts.push(`NCEI's latest batch reached the census ${meta.last_latency_min} min after it was published${typical}`);
+    }
+    $("updated").innerHTML = parts.join(`<span class="sep">·</span>`);
+  };
+  draw();
+  window.setInterval(draw, 60_000);
 }
 
 /* ---------- Logbook drawer ---------- */

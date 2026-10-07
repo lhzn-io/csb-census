@@ -31,5 +31,5 @@
 ## Phase 3: Bathymetry context and gridded products
 
 - [ ] Basemap mash-up: Open Waters Seascape and topobathykit (formerly topobathysim) tiles
-- [ ] Crowdsourced depths compared with topobathykit survey surfaces in Long Island Sound, after tide reduction
+- [ ] Crowdsourced depths compared with topobathykit survey surfaces in the Long Island Sound, after tide reduction
 - [ ] Coverage cube (provider by month by lat/lon) as Zarr, compatible with topobathykit layers

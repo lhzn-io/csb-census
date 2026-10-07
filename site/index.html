@@ -3,6 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
     <title>CSB Census</title>
     <meta name="description" content="An open census of every crowdsourced depth sounding published by the IHO Data Centre for Digital Bathymetry, mapped on the world ocean." />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -13,6 +14,7 @@
     />
   </head>
   <body class="hz landing-sp">
+    <p class="updated" id="updated" aria-live="polite"></p>
     <header class="mast">
       <a class="wordmark" href="./" aria-label="CSB Census home">
         <span class="wm-top">CSB</span>
@@ -49,11 +51,12 @@
 
 
       <section class="sp-side">
-        <h1 class="sp-title">The world ocean,<br />sounded by<br />the crowd</h1>
+        <h1 class="sp-title">Vessels of<br />opportunity<br />measure the<br />changing seafloor</h1>
         <p class="sp-lede">
-          Every depth sounding volunteers and partners have shared through the <a href="https://iho.int/">IHO</a>'s
-          <a href="https://iho.int/en/crowdsourced-bathymetry">Crowdsourced Bathymetry</a> initiative and its <a href="https://iho.int/en/data-centre-for-digital-bathymetry">Data Centre for Digital Bathymetry</a>,
-          counted, deduplicated and mapped, and kept current as <a href="https://www.ncei.noaa.gov/">NOAA NCEI</a> publishes each batch to
+          <a href="https://seabed2030.org/">Seabed 2030</a> aims to map the whole ocean floor by 2030, and every boat with an echosounder can help.
+          This is a live, open census of each depth sounding shared through the <a href="https://iho.int/">IHO</a>'s
+          <a href="https://iho.int/en/crowdsourced-bathymetry">Crowdsourced Bathymetry</a> initiative and its <a href="https://iho.int/en/data-centre-for-digital-bathymetry">Data Centre for Digital Bathymetry</a>:
+          counted, deduplicated and mapped, and updated four times a day as <a href="https://www.ncei.noaa.gov/">NOAA NCEI</a> publishes each batch to
           the <a href="https://registry.opendata.aws/noaa-dcdb-bathymetry-pds/">open archive</a>. Browse the raw soundings in the <a href="https://www.ncei.noaa.gov/maps/iho_dcdb/">DCDB data viewer</a>.
         </p>
         <div class="sp-figures" id="sp-figures"></div>
@@ -74,6 +77,10 @@
           Independent census by <a href="https://longhorizon.eco/">Long Horizon Observatory</a> from <a href="https://www.ncei.noaa.gov/">NOAA NCEI</a> /
           <a href="https://iho.int/en/data-centre-for-digital-bathymetry">IHO DCDB</a> public data. Cells: <a href="https://h3geo.org/">H3</a>. Land: <a href="https://www.naturalearthdata.com/">Natural Earth</a>. Not for
           navigation. <a href="https://github.com/lhzn-io/csb-census/blob/main/docs/src/methodology.md">Methodology</a> &middot; <a href="https://github.com/lhzn-io/csb-census">Code</a>
+        </p>
+        <p class="note aside">
+          <span class="aside-tag">Fun fact</span> <a href="https://github.com/lhzn-io">lhzn-io</a> maps the seabed of the Long Island Sound with a <a href="https://github.com/CCOMJHC/WIBL">WIBL</a> logger
+          from the <a href="https://www.ccom.unh.edu/">UNH Center for Coastal and Ocean Mapping</a>.
         </p>
       </section>
 

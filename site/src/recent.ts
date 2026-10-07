@@ -1,5 +1,5 @@
 /** Recent activity: what NCEI published lately, and where boats have been. */
-import { $, frameChart, renderUpdated, renderColumns, renderHorizon, renderLadder, renderReadouts, renderReflection, table, wireLogbook, YELLOW } from "./chartroom";
+import { $, frameChart, renderUpdated, renderColumns, renderHorizon, renderLadder, renderReadouts, renderReflection, setFavicon, table, wireLogbook, YELLOW } from "./chartroom";
 import { RECENT_BINS, binColor } from "./colors";
 import { createMapView, whenLoaded } from "./mapview";
 import { compact, loadMeta } from "./metrics";
@@ -84,7 +84,9 @@ async function main(): Promise<void> {
   const [recent, manifest, meta] = await Promise.all([loadRecent(), loadManifest(), loadMeta()]);
   state.manifest = manifest;
   const batches = recent.batches;
-  renderReflection(column(batches, "unique").slice(-7).reverse(), "unique soundings, last 7 batches");
+  const last7 = column(batches, "unique").slice(-7).reverse();
+  renderReflection(last7, "unique soundings, last 7 batches");
+  setFavicon(last7);
   const d = recent.strip["24h"];
   const w = recent.strip["7d"];
   renderReadouts([

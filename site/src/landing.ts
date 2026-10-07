@@ -1,5 +1,5 @@
 /** Landing page: the whole archive on the world-ocean square, with the ways in. */
-import { $, renderLadder, renderReflection } from "./chartroom";
+import { $, renderLadder, renderReflection, renderUpdated, setFavicon } from "./chartroom";
 import { ARCHIVE_BINS, binColor, uniqueColor, type RGBA } from "./colors";
 import { DATA } from "./config";
 import { compact, loadMeta } from "./metrics";
@@ -298,6 +298,7 @@ async function main(): Promise<void> {
     input.checked = input.value === initial;
     input.addEventListener("change", () => void useCenter(input.value));
   }
+  renderUpdated(meta);
   new ResizeObserver(() => draw()).observe($("sp-chart"));
 
   $("sp-figures").innerHTML = [
@@ -314,6 +315,7 @@ async function main(): Promise<void> {
   // Reflection lines: unique soundings in the last seven publication batches, as on the recent page.
   const uni = recent.batches.rows.map((r) => Number(r[recent.batches.columns.indexOf("unique")]));
   renderReflection(uni.slice(-7).reverse(), "unique soundings, last 7 batches");
+  setFavicon(uni.slice(-7).reverse());
 
   for (const input of document.querySelectorAll<HTMLInputElement>('input[name="metric"]')) {
     input.addEventListener("change", () => {

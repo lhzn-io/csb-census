@@ -10,7 +10,9 @@
   --rule: rgba(255, 255, 255, 0.18);
   --dim: #9aa8b3;
   --gutter: 26px;
+  --strip: 24px;
   --mast: 86px;
+  --top: calc(var(--strip) + var(--mast));
   --band: 226px;
   --sans: "Josefin Sans", "Futura", "Century Gothic", sans-serif;
   --serif: "Instrument Serif", "Iowan Old Style", Georgia, serif;
@@ -22,7 +24,7 @@
 html, body { margin: 0; height: 100%; }
 body.hz {
   display: grid;
-  grid-template-rows: var(--mast) 1fr var(--band);
+  grid-template-rows: var(--strip) var(--mast) 1fr var(--band);
   height: 100vh;
   overflow: hidden;
   background: var(--night);
@@ -149,12 +151,17 @@ a { color: inherit; }
   background: linear-gradient(100deg, var(--deep) 0%, #3d5668 55%, var(--slate) 100%);
   border-top: 1px solid rgba(222, 207, 3, 0.55);
 }
+/* Freshness strip: a quiet rail across the very top of every page. */
 .updated {
-  grid-column: 1 / -1; margin: -6px 0 -8px; font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.02em;
-  color: rgba(255, 255, 255, 0.78);
+  display: block; margin: 0; padding: 0 var(--gutter); height: var(--strip); line-height: var(--strip);
+  overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+  font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.02em; color: rgba(255, 255, 255, 0.72);
+  background: linear-gradient(90deg, var(--deep) 0%, #1c2b36 45%, var(--night) 100%);
+  border-bottom: 1px solid rgba(222, 207, 3, 0.35);
 }
-.updated b { font-family: var(--sans); font-size: 9px; font-weight: 700; letter-spacing: 0.22em; text-transform: uppercase; color: var(--yellow); margin-right: 4px; }
-.updated .ago { color: rgba(255, 255, 255, 0.55); }
+.updated b { font-family: var(--sans); font-size: 9px; font-weight: 700; letter-spacing: 0.22em; text-transform: uppercase; color: var(--yellow); margin-right: 6px; }
+.updated .ago { color: rgba(255, 255, 255, 0.5); }
+.updated .sep { margin: 0 8px; color: rgba(255, 255, 255, 0.3); }
 .readouts { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px 26px; align-content: center; }
 .readout .num {
   font-family: var(--figures); font-size: var(--figures-size, 46px); font-weight: var(--figures-weight, 400);
@@ -198,7 +205,7 @@ figcaption { display: flex; gap: 14px; align-items: baseline; flex-wrap: wrap; m
 
 /* Logbook: a drawer behind a vertical tab on the right edge. */
 .logbook-tab {
-  position: fixed; right: 0; top: calc(var(--mast) + 120px); z-index: 6;
+  position: fixed; right: 0; top: calc(var(--top) + 120px); z-index: 6;
   writing-mode: vertical-rl; cursor: pointer;
   font: 700 10px/1 var(--sans); letter-spacing: 0.24em; text-transform: uppercase;
   padding: 16px 8px 16px 10px; border: 1px solid var(--rule); border-right: 0; border-radius: 999px 0 0 999px;
@@ -207,7 +214,7 @@ figcaption { display: flex; gap: 14px; align-items: baseline; flex-wrap: wrap; m
 }
 .logbook-tab:hover, .logbook-tab[aria-expanded="true"] { color: var(--yellow); border-color: rgba(222, 207, 3, 0.55); }
 .logbook {
-  position: fixed; top: var(--mast); right: 0; bottom: var(--band); z-index: 5; width: min(380px, 92vw);
+  position: fixed; top: var(--top); right: 0; bottom: var(--band); z-index: 5; width: min(380px, 92vw);
   overflow-y: auto; padding: 22px 54px 24px 24px;
   background: rgba(17, 17, 17, 0.94); border-left: 1px solid var(--rule); backdrop-filter: blur(6px);
 }
@@ -223,9 +230,11 @@ figcaption { display: flex; gap: 14px; align-items: baseline; flex-wrap: wrap; m
 .lagbar span { display: block; height: 100%; background: var(--yellow); }
 .lagrow .v { text-align: right; color: var(--dim); }
 .note { font-size: 12px; color: var(--dim); line-height: 1.4; }
+.note.aside { margin-top: -4px; }
+.aside-tag { margin-right: 6px; font-size: 9px; font-weight: 700; letter-spacing: 0.2em; text-transform: uppercase; color: var(--yellow); }
 
 /* Landing: the square ocean on the left, the invitation on the right (text first in the source). */
-body.landing-sp { grid-template-rows: auto 1fr; }
+body.landing-sp { grid-template-rows: var(--strip) auto 1fr; }
 body.landing-sp .mast { min-height: var(--mast); }
 .tab.static { cursor: default; color: var(--ink); }
 .tab.static:hover { border-color: transparent; }
@@ -240,14 +249,14 @@ body.landing-sp .mast { min-height: var(--mast); }
 
 /* Center drawer: a quiet tab on the left edge, mirroring the logbook on the other pages. */
 .center-tab {
-  position: fixed; left: 0; top: calc(var(--mast) + 120px); z-index: 6; writing-mode: vertical-rl; cursor: pointer;
+  position: fixed; left: 0; top: calc(var(--top) + 120px); z-index: 6; writing-mode: vertical-rl; cursor: pointer;
   font: 700 10px/1 var(--sans); letter-spacing: 0.24em; text-transform: uppercase;
   padding: 16px 10px 16px 8px; border: 1px solid var(--rule); border-left: 0; border-radius: 0 999px 999px 0;
   background: rgba(17, 17, 17, 0.88); color: var(--dim); transition: color 0.15s, border-color 0.15s;
 }
 .center-tab:hover, .center-tab[aria-expanded="true"] { color: var(--yellow); border-color: rgba(222, 207, 3, 0.55); }
 .center-drawer {
-  position: fixed; left: 0; top: var(--mast); bottom: 0; z-index: 5; width: min(300px, 86vw); overflow-y: auto;
+  position: fixed; left: 0; top: var(--top); bottom: 0; z-index: 5; width: min(300px, 86vw); overflow-y: auto;
   padding: 22px 22px 24px 48px; background: rgba(17, 17, 17, 0.95); border-right: 1px solid var(--rule); backdrop-filter: blur(6px);
 }
 .center-drawer h2 { margin: 0 0 10px; font-weight: 300; font-size: 24px; letter-spacing: 0.3em; text-transform: uppercase; color: var(--yellow); }
@@ -298,7 +307,7 @@ body.landing-sp .mast { min-height: var(--mast); }
 .sp-card-go { font-size: 10px; font-weight: 700; letter-spacing: 0.2em; text-transform: uppercase; color: var(--dim); }
 .sp-card:hover .sp-card-go { color: var(--yellow); }
 @media (max-width: 900px) {
-  body.landing-sp { grid-template-rows: auto auto; }
+  body.landing-sp { grid-template-rows: auto auto auto; }
   body.landing-sp .sp-main { grid-template-columns: 1fr; gap: 26px; padding-top: 14px; }
   body.landing-sp .sp-chart { order: 1; min-height: calc(100vw - 2 * var(--gutter) + 26px); }
   body.landing-sp .sp-side { order: 2; overflow: visible; }
@@ -318,7 +327,7 @@ body.landing-sp .mast { min-height: var(--mast); }
 .deck-tooltip { font-family: var(--mono) !important; font-size: 10.5px !important; background: rgba(17, 17, 17, 0.92) !important; border-left: 2px solid var(--yellow); }
 
 @media (max-width: 900px) {
-  body.hz { grid-template-rows: auto auto 62vh auto; height: auto; overflow: auto; }
+  body.hz { grid-template-rows: auto auto auto 62vh auto; height: auto; overflow: auto; }
   :root { --gutter: 12px; }
   .mast { padding: 12px var(--gutter); flex-wrap: wrap; }
   .mast-note { display: none; }
@@ -330,4 +339,5 @@ body.landing-sp .mast { min-height: var(--mast); }
   .band { grid-template-columns: 1fr; gap: 18px; }
   #horizon, #batches { height: 110px; flex: none; }
   .logbook { top: 0; bottom: 0; }
+  .updated { height: auto; white-space: normal; line-height: 1.5; padding-top: 4px; padding-bottom: 4px; }
 }

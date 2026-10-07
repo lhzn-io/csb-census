@@ -1,5 +1,5 @@
 /** Full archive: every sounding DCDB has published, by place. */
-import { $, frameChart, renderUpdated, renderColumns, renderHorizon, renderLadder, renderReadouts, renderReflection, table, wireLogbook, YELLOW } from "./chartroom";
+import { $, frameChart, renderUpdated, renderColumns, renderHorizon, renderLadder, renderReadouts, renderReflection, setFavicon, table, wireLogbook, YELLOW } from "./chartroom";
 import { loadSeries, type Series } from "./charts";
 import { ARCHIVE_BINS, binColor, dupColor, uniqueColor, type RGBA } from "./colors";
 import { LIS_BBOX } from "./config";
@@ -7,6 +7,7 @@ import { loadLis, renderLisSummary } from "./lis";
 import { createMapView, whenLoaded } from "./mapview";
 import { compact, loadMeta, type Meta } from "./metrics";
 import { loadManifest, type Cell, type LayerManifest } from "./tiles";
+import { column, loadRecent } from "./recentdata";
 
 type Metric = "unique" | "vessels" | "dup";
 
@@ -122,6 +123,9 @@ async function main(): Promise<void> {
   band(meta, series);
   logbook(meta);
   renderUpdated(meta);
+  loadRecent()
+    .then((r) => setFavicon(column(r.batches, "unique").slice(-7).reverse()))
+    .catch(() => undefined); // the static favicon stands
 
   for (const input of document.querySelectorAll<HTMLInputElement>('input[name="metric"]')) {
     input.addEventListener("change", () => {
