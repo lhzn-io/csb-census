@@ -56,7 +56,8 @@ harbor. To show where the crowd is, the census also counts **vessel-days**.
 
 ## Two clocks
 
-The census uses two clocks and always says which:
+The census uses two clocks and always says which (short definitions of every
+term are in the [glossary](glossary.md)):
 
 - **Publication time** is the stamp at the start of each file name, written when
   NCEI ingested the file. It answers "what came in today". Files reach the
@@ -158,6 +159,46 @@ published by NCEI shortly after, so the replay runs one more batch past the end
 of the month before comparing. They must agree within 0.01% on unique
 soundings. The replay also reports the resend and cross-platform split, the
 bytes re-read and the slowest run, which must finish within 45 minutes.
+
+## What the census cannot see
+
+The census counts what NCEI publishes. That is a floor, not a total, on the
+crowdsourced bathymetry that exists:
+
+- **Contributing to DCDB is a choice.** Logging tools such as
+  [WIBL](https://github.com/CCOMJHC/WIBL) let a Trusted Node keep its data on its
+  own servers or in its own cloud storage. Data ownership is sensitive in many
+  places, and some collectors never submit.
+- **Private collections are outside the archive.** Several recreational
+  echosounder makers, and services such as Olex, gather depths from their users
+  but share them only with subscribers.
+- **Steps before NCEI are invisible.** Data held on a logger, waiting at a
+  Trusted Node or rejected by a check before submission never reaches the
+  census.
+- **Valid is not good.** Trusted Nodes check that submissions are well formed
+  (for example against the B-12 JSON schema in
+  [csbschema](https://github.com/CCOMJHC/csbschema)). A well-formed file can
+  still hold bad depths, positions or times. The census does not grade accuracy.
+
+## Reading duplicates and lag
+
+The census records *that* a duplicate exists, not *why*. What is known about
+how data is collected suggests where to look, but these are hypotheses, not
+findings:
+
+- **Resends.** Builders of Trusted Node pipelines report that processing at
+  scale is the easy part. The hard part is keeping track of which files have
+  been sent, which succeeded and which failed. A pipeline that loses track will
+  submit the same file again, which the census would count as a resend.
+- **Vessel networks.** A logger records everything on the boat's network. Boats
+  often carry more than one GPS or depth source, sometimes bridged between an
+  old and a new network, so one vessel can broadcast several conflicting feeds.
+  That makes for messy input, but it produces *differing* soundings, not exact
+  copies, so it is not by itself an explanation for exact duplicates.
+- **Lag.** Boats without internet at sea hand over data only when it is copied
+  off the logger in port, often by phone, and a Trusted Node may then batch
+  several vessels before submitting. Long and lumpy publication lag is expected,
+  and a burst of old collection dates in one batch is normal.
 
 ## Limitations
 

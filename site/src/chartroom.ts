@@ -302,13 +302,53 @@ export function renderUpdated(meta: Freshness): void {
 
 /* ---------- Logbook drawer ---------- */
 
-export function wireLogbook(): void {
-  const tab = $("logbook-tab");
-  const book = $("logbook");
+/* ---------- Right-hand drawers (Logbook, Bookmarks, About): one open at a time ---------- */
+
+export function closeDrawer(id: string): void {
+  const drawer = document.getElementById(id);
+  if (!drawer || drawer.hidden) return;
+  drawer.hidden = true;
+  document.querySelector(`[aria-controls="${id}"]`)?.setAttribute("aria-expanded", "false");
+}
+
+/** A tab toggles its drawer and closes any other; `onOpen` runs on each opening. */
+export function wireDrawer(tabId: string, drawerId: string, onOpen?: () => void): void {
+  const tab = $(tabId);
+  const drawer = $(drawerId);
   tab.addEventListener("click", () => {
-    const open = book.hidden;
-    book.hidden = !open;
+    const open = drawer.hidden;
+    if (open) for (const other of document.querySelectorAll<HTMLElement>("aside.logbook")) if (other !== drawer) closeDrawer(other.id);
+    drawer.hidden = !open;
     tab.setAttribute("aria-expanded", String(open));
+    if (open) onOpen?.();
+  });
+}
+
+export function wireLogbook(): void {
+  wireDrawer("logbook-tab", "logbook");
+}
+
+/**
+ * The About drawer: what the census is, then the glossary, loaded on first opening so pages stay light.
+ * The strip's About link opens it too; where there is no drawer (the About page) the link is the page.
+ */
+export function wireAbout(): void {
+  let loaded = false;
+  wireDrawer("about-tab", "about", () => {
+    if (loaded) return;
+    loaded = true;
+    import("./glossary")
+      .then(({ aboutHtml }) => {
+        $("about-body").innerHTML = aboutHtml({ anchors: false });
+      })
+      .catch((err: unknown) => {
+        loaded = false;
+        console.error(err);
+      });
+  });
+  document.querySelector(".strip-link")?.addEventListener("click", (e) => {
+    e.preventDefault();
+    if ($("about").hidden) $("about-tab").click();
   });
 }
 

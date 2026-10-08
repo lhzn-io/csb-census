@@ -1,6 +1,7 @@
 /** Recent activity: what NCEI published lately, and where boats have been. */
-import { $, frameChart, renderUpdated, renderColumns, renderHorizon, renderLadder, renderReadouts, renderReflection, setFavicon, table, wireLogbook, YELLOW } from "./chartroom";
+import { $, frameChart, renderUpdated, renderColumns, renderHorizon, renderLadder, renderReadouts, renderReflection, setFavicon, table, wireAbout, wireLogbook, YELLOW } from "./chartroom";
 import { AGE_STEPS, RECENT_BINS, binColor, freshColor, type RGBA } from "./colors";
+import { wireBookmarks } from "./bookmarks";
 import { createMapView, whenLoaded } from "./mapview";
 import { compact, loadMeta } from "./metrics";
 import { column, epochs, hours, loadRecent, type Recent, type WindowName } from "./recentdata";
@@ -136,6 +137,8 @@ function logbook(r: Recent): void {
 async function main(): Promise<void> {
   ladder();
   wireLogbook();
+  wireBookmarks(view.map);
+  wireAbout();
   const [recent, manifest, meta] = await Promise.all([loadRecent(), loadManifest(), loadMeta()]);
   state.manifest = manifest;
   state.recent = recent;
@@ -145,12 +148,12 @@ async function main(): Promise<void> {
   renderReflection(last7, "unique soundings, last 7 batches");
   setFavicon(last7);
   const d = recent.strip["24h"];
-  const w = recent.strip["7d"];
+  // The archive's slots (soundings, unique, then median lag where it has vessel-days, platforms), for 24 hours.
   renderReadouts([
-    [compact(d.published), "Soundings", "published in the last 24 hours"],
-    [w.platforms.toLocaleString("en"), "Platforms", `active this week, <em>${w.new_platforms}</em> new`],
-    [compact(w.unique), "Unique", "soundings published this week"],
-    [hours(w.median_lag_h), "Median lag", "collection to publication, this week"],
+    [compact(d.published), "Soundings", `last 24 hours, in ${d.files.toLocaleString("en")} files`],
+    [compact(d.unique), "Unique", `<em>${((100 * d.unique) / Math.max(1, d.published)).toFixed(0)}%</em> of published`],
+    [hours(d.median_lag_h), "Median lag", "collection to publication"],
+    [d.platforms.toLocaleString("en"), "Platforms", `active, <em>${d.new_platforms}</em> new`],
   ]);
   horizon(recent, "pub");
   const pub = column(batches, "published");

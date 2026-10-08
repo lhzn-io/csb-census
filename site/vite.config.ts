@@ -3,9 +3,11 @@ import { defineConfig } from "vite";
 
 // Relative base: the site is served from https://lhzn-io.github.io/csb-census/ (or a custom domain).
 // Data lives in public/data, written by `csb-census layers --out site/public/data`.
-// Three pages: the landing page, the full archive and recent activity.
+// Four pages: the landing page, the full archive, recent activity and About (which renders
+// docs/src/glossary.md, outside the site root, hence fs.allow).
 export default defineConfig({
   base: "./",
+  server: { fs: { allow: [".."] } },
   build: {
     target: "es2022",
     chunkSizeWarningLimit: 2400, // the map bundle (MapLibre + deck.gl), loaded only by the two map pages
@@ -14,6 +16,7 @@ export default defineConfig({
         index: resolve(import.meta.dirname, "index.html"),
         archive: resolve(import.meta.dirname, "archive.html"),
         recent: resolve(import.meta.dirname, "recent.html"),
+        about: resolve(import.meta.dirname, "about.html"),
       },
     },
   },

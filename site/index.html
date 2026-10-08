@@ -14,7 +14,7 @@
     />
   </head>
   <body class="hz landing-sp">
-    <p class="updated" id="updated" aria-live="polite"></p>
+    <div class="strip"><p class="updated" id="updated" aria-live="polite"></p><a class="strip-link" href="about.html">About</a></div>
     <header class="mast">
       <a class="wordmark" href="./" aria-label="CSB Census home">
         <span class="wm-top">CSB</span>
@@ -76,7 +76,7 @@
         <p class="note">
           Independent census by <a href="https://longhorizon.eco/">Long Horizon Observatory</a> from <a href="https://www.ncei.noaa.gov/">NOAA NCEI</a> /
           <a href="https://iho.int/en/data-centre-for-digital-bathymetry">IHO DCDB</a> public data. Cells: <a href="https://h3geo.org/">H3</a>. Land: <a href="https://www.naturalearthdata.com/">Natural Earth</a>. Not for
-          navigation. <a href="https://github.com/lhzn-io/csb-census/blob/main/docs/src/methodology.md">Methodology</a> &middot; <a href="https://github.com/lhzn-io/csb-census">Code</a>
+          navigation. <a href="https://github.com/lhzn-io/csb-census/blob/main/docs/src/methodology.md">Methodology</a> &middot; <a href="about.html">About</a> &middot; <a href="https://github.com/lhzn-io/csb-census">Code</a>
         </p>
         <p class="note aside">
           <span class="aside-tag">Fun fact</span> <a href="https://github.com/lhzn-io">lhzn-io</a> maps the seabed of the Long Island Sound with a <a href="https://github.com/CCOMJHC/WIBL">WIBL</a> logger
@@ -106,6 +106,13 @@
       <p class="note">The first visit starts on the center nearest your time zone.</p>
     </aside>
 
+
+    <button class="logbook-tab about-tab" id="about-tab" type="button" aria-expanded="false" aria-controls="about">About</button>
+    <aside class="logbook about-drawer" id="about" hidden>
+      <h2>About</h2>
+      <p class="note">To link to a term, <a href="about.html">open this as a page</a>.</p>
+      <div class="defs-body" id="about-body"><p class="note">Loading&hellip;</p></div>
+    </aside>
     <script type="module" src="./src/landing.ts"></script>
   </body>
 </html>

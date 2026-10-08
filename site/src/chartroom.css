@@ -74,15 +74,6 @@ a { color: inherit; }
   body.landing-sp .mast-note { display: block; order: 9; flex: 1 0 100%; max-width: 640px; -webkit-line-clamp: unset; }
 }
 
-/* Bookmarks: places to jump to, tucked under the cursor readout like pencilled notes on a chart. */
-.bookmarks { position: absolute; left: 30px; top: 60px; z-index: 2; display: flex; flex-direction: column; align-items: flex-start; gap: 3px; }
-.bookmarks-label { font-size: 8.5px; font-weight: 700; letter-spacing: 0.24em; text-transform: uppercase; color: #6f7c86; }
-.bookmarks button {
-  font: italic 14px/1.2 var(--serif); color: var(--ink); background: rgba(17, 17, 17, 0.6); cursor: pointer;
-  border: 0; border-bottom: 1px solid rgba(222, 207, 3, 0.45); padding: 2px 4px;
-}
-.bookmarks button:hover { color: var(--yellow-hi); }
-
 /* Tabs: quiet hanging tags in the masthead's open top-right. Only the active one carries the brand
    yellow, as a thin line and text, so the controls never compete with the data. */
 .tabs { margin-left: auto; align-self: flex-start; display: flex; gap: 26px; align-items: flex-start; }
@@ -162,13 +153,20 @@ a { color: inherit; }
   border-top: 1px solid rgba(222, 207, 3, 0.55);
 }
 /* Freshness strip: a quiet rail across the very top of every page. */
-.updated {
-  display: block; margin: 0; padding: 0 var(--gutter); height: var(--strip); line-height: var(--strip);
-  overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
-  font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.02em; color: rgba(255, 255, 255, 0.72);
+.strip {
+  display: flex; align-items: center; gap: 16px; padding: 0 var(--gutter); min-height: var(--strip);
   background: linear-gradient(90deg, var(--deep) 0%, #1c2b36 45%, var(--night) 100%);
   border-bottom: 1px solid rgba(222, 207, 3, 0.35);
 }
+.updated {
+  flex: 1; min-width: 0; margin: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+  font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.02em; color: rgba(255, 255, 255, 0.72);
+}
+.strip-link {
+  flex: none; font-size: 10.5px; font-weight: 700; letter-spacing: 0.2em; text-transform: uppercase;
+  text-decoration: none; color: var(--ink); transition: color 0.15s;
+}
+.strip-link:hover, .strip-link[aria-current="page"] { color: var(--yellow); }
 .updated b { font-family: var(--sans); font-size: 9px; font-weight: 700; letter-spacing: 0.22em; text-transform: uppercase; color: var(--yellow); margin-right: 6px; }
 .updated .ago { color: rgba(255, 255, 255, 0.5); }
 .updated .sep { margin: 0 8px; color: rgba(255, 255, 255, 0.3); }
@@ -223,6 +221,26 @@ figcaption { display: flex; gap: 14px; align-items: baseline; flex-wrap: wrap; m
   transition: color 0.15s, border-color 0.15s;
 }
 .logbook-tab:hover, .logbook-tab[aria-expanded="true"] { color: var(--yellow); border-color: rgba(222, 207, 3, 0.55); }
+/* Bookmarks: a second tab under the Logbook, opening the same drawer. */
+.bookmarks-tab { top: calc(var(--top) + 236px); }
+.bookmark-list { display: flex; flex-direction: column; gap: 12px; }
+.bookmark {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 0 0 8px; cursor: pointer;
+  background: none; border: 0; border-bottom: 1px solid var(--rule); color: var(--ink); text-align: left;
+}
+.bookmark-name { font: italic 20px/1.15 var(--serif); border-bottom: 1px solid rgba(222, 207, 3, 0.45); }
+.bookmark-note { font-size: 11px; color: var(--dim); }
+.bookmark:hover .bookmark-name { color: var(--yellow-hi); }
+/* About: a third tab under Bookmarks (the landing page has only this one), and a wider drawer. */
+.about-tab { top: calc(var(--top) + 362px); }
+body.landing-sp .about-tab { top: calc(var(--top) + 120px); }
+body.landing-sp .logbook { bottom: 0; }
+.about-drawer { width: min(460px, 94vw); }
+.logbook .defs-body h2 {
+  margin: 26px 0 2px; padding-top: 10px; border-top: 1px solid var(--rule);
+  font-size: 10px; font-weight: 700; letter-spacing: 0.22em; text-transform: uppercase; color: var(--dim);
+}
+.logbook .defs-body h3 { margin: 16px 0 4px; font-weight: 400; font-size: 19px; letter-spacing: 0.04em; text-transform: none; color: var(--yellow); }
 .logbook {
   position: fixed; top: var(--top); right: 0; bottom: var(--band); z-index: 5; width: min(380px, 92vw);
   overflow-y: auto; padding: 22px 54px 24px 24px;
@@ -337,7 +355,7 @@ body.landing-sp .mast { min-height: var(--mast); }
 .deck-tooltip { font-family: var(--mono) !important; font-size: 10.5px !important; background: rgba(17, 17, 17, 0.92) !important; border-left: 2px solid var(--yellow); }
 
 @media (max-width: 900px) {
-  body.hz { grid-template-rows: auto auto auto 62vh auto; height: auto; overflow: auto; }
+  body.hz { grid-template-rows: auto auto 62vh auto; height: auto; overflow: auto; } /* strip, mast, chart, band */
   :root { --gutter: 12px; }
   .mast { padding: 12px var(--gutter); flex-wrap: wrap; }
   .mast-note { display: none; }
@@ -349,5 +367,49 @@ body.landing-sp .mast { min-height: var(--mast); }
   .band { grid-template-columns: 1fr; gap: 18px; }
   #horizon, #batches { height: 110px; flex: none; }
   .logbook { top: 0; bottom: 0; }
-  .updated { height: auto; white-space: normal; line-height: 1.5; padding-top: 4px; padding-bottom: 4px; }
+  .strip { align-items: flex-start; padding-top: 4px; padding-bottom: 4px; }
+  .updated { white-space: normal; line-height: 1.5; }
+}
+
+/* About: the page version of the drawer; masthead fixed, terms scroll beside a contents list. */
+body.hz.doc { grid-template-rows: var(--strip) var(--mast) 1fr; }
+.doc-main {
+  display: grid; grid-template-columns: 200px minmax(0, 720px); gap: 56px; min-height: 0;
+  margin: 0 var(--gutter); padding: 26px 0 0; overflow-y: auto; border-top: 1px solid var(--rule);
+}
+.doc-toc { position: sticky; top: 0; align-self: start; display: flex; flex-direction: column; gap: 3px; padding-bottom: 40px; }
+.doc-toc-group {
+  margin: 14px 0 4px; font-size: 9px; font-weight: 700; letter-spacing: 0.22em; text-transform: uppercase; color: #6f7c86;
+}
+.doc-toc-group:first-child { margin-top: 0; }
+.doc-toc a { font-size: 14px; color: var(--dim); text-decoration: none; transition: color 0.15s; }
+.doc-toc a:hover { color: var(--yellow); }
+.doc-article { padding-bottom: 80px; }
+.doc-article h1 { margin: 0 0 10px; font-weight: 300; font-size: 34px; letter-spacing: 0.3em; text-transform: uppercase; color: var(--yellow); }
+.doc-article h2 {
+  margin: 40px 0 4px; padding-top: 12px; border-top: 1px solid var(--rule);
+  font-size: 10px; font-weight: 700; letter-spacing: 0.24em; text-transform: uppercase; color: var(--dim);
+}
+.doc-article h3 { margin: 28px 0 6px; font-weight: 300; font-size: 26px; letter-spacing: 0.06em; scroll-margin-top: 16px; }
+.doc-article h3:target { color: var(--yellow); }
+.doc-article .anchor { color: inherit; text-decoration: none; }
+.doc-article p, .defs-body p { margin: 0 0 10px; max-width: 68ch; font-size: 16px; line-height: 1.6; color: rgba(255, 255, 255, 0.86); }
+.defs-body p { font-size: 14.5px; line-height: 1.55; }
+.doc-article ol, .defs-body ol { margin: 0 0 12px; padding-left: 22px; max-width: 68ch; }
+.doc-article li, .defs-body li { margin: 0 0 7px; font-size: 16px; line-height: 1.55; color: rgba(255, 255, 255, 0.86); }
+.defs-body li { font-size: 14.5px; }
+.doc-article strong, .defs-body strong { font-weight: 600; color: var(--ink); }
+.doc-article code, .defs-body code { font-family: var(--mono); font-size: 0.8em; color: #e8de6a; }
+.doc-article table, .defs-body table { margin: 8px 0 14px; border-collapse: collapse; font-family: var(--mono); font-size: 11px; }
+.doc-article th, .doc-article td, .defs-body th, .defs-body td { padding: 6px 14px 6px 0; border-bottom: 1px solid var(--rule); text-align: left; font-weight: 400; }
+.doc-article th, .defs-body th { color: var(--dim); font-size: 9.5px; letter-spacing: 0.08em; }
+.doc-article p a, .doc-article td a, .defs-body p a, .defs-body td a {
+  text-decoration: underline; text-decoration-color: rgba(222, 207, 3, 0.45); text-underline-offset: 2px;
+}
+.doc-article p a:hover, .doc-article td a:hover, .defs-body p a:hover, .defs-body td a:hover { color: var(--yellow-hi); }
+@media (max-width: 900px) {
+  body.hz.doc { grid-template-rows: auto auto 1fr; }
+  .doc-main { grid-template-columns: 1fr; gap: 0; }
+  .doc-toc { display: none; }
+  .doc-article h1 { font-size: 26px; }
 }

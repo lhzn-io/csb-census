@@ -18,8 +18,8 @@ does not imply IHO, DCDB, NOAA or provider endorsement. It is maintained by Long
 Horizon Observatory alongside
 [csb-trusted-node](https://github.com/lhzn-io/csb-trusted-node).
 
-> **Status:** pre-alpha. The method is fixed; the full-archive backfill and its
-> validation are in progress.
+> **Status:** pre-alpha. The full-archive backfill is complete, and the 6-hourly
+> updates are in their final validation run.
 
 ## Method in one paragraph
 
@@ -28,6 +28,15 @@ The first-ingested copy is the original. Every later copy is a duplicate: a
 *resend* if it carries the same platform ID, and *cross-platform* otherwise.
 Ranking runs independently per collection month, because exact duplicates share
 `TIME`. See [`docs/src/methodology.md`](docs/src/methodology.md).
+
+## Terms
+
+A **platform** is one `UNIQUE_ID` in the archive, the anonymous vessel ID a
+Trusted Node issues (usually one vessel, not always). A **provider** is the
+organization the data came through, usually a Trusted Node. A **vessel-day** is
+one platform collecting in one place on one day. These and the census's other
+terms are defined in [`docs/src/glossary.md`](docs/src/glossary.md), which the
+dashboard also shows in its About drawer and page.
 
 ## Usage
 

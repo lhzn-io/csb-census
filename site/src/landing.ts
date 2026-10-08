@@ -1,5 +1,5 @@
 /** Landing page: the whole archive on the world-ocean square, with the ways in. */
-import { $, renderLadder, renderReflection, renderUpdated, setFavicon } from "./chartroom";
+import { $, renderLadder, renderReflection, renderUpdated, setFavicon, wireAbout } from "./chartroom";
 import { ARCHIVE_BINS, binColor, uniqueColor, type RGBA } from "./colors";
 import { DATA } from "./config";
 import { compact, loadMeta } from "./metrics";
@@ -283,6 +283,7 @@ function wireDrawer(): void {
 
 async function main(): Promise<void> {
   wireDrawer();
+  wireAbout();
   ladder();
   // A visitor's own earlier choice wins; otherwise start near them.
   let initial = nearestCenter();

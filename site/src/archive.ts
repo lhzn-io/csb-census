@@ -1,9 +1,9 @@
 /** Full archive: every sounding DCDB has published, by place. */
-import { $, frameChart, renderUpdated, renderColumns, renderHorizon, renderLadder, renderReadouts, renderReflection, setFavicon, table, wireLogbook, YELLOW } from "./chartroom";
+import { $, frameChart, renderUpdated, renderColumns, renderHorizon, renderLadder, renderReadouts, renderReflection, setFavicon, table, wireAbout, wireLogbook, YELLOW } from "./chartroom";
 import { loadSeries, type Series } from "./charts";
 import { ARCHIVE_BINS, binColor, dupColor, uniqueColor, type RGBA } from "./colors";
-import { LIS_BBOX } from "./config";
 import { loadLis, renderLisSummary } from "./lis";
+import { wireBookmarks } from "./bookmarks";
 import { createMapView, whenLoaded } from "./mapview";
 import { compact, loadMeta, type Meta } from "./metrics";
 import { loadManifest, type Cell, type LayerManifest } from "./tiles";
@@ -118,6 +118,8 @@ function logbook(meta: Meta): void {
 async function main(): Promise<void> {
   ladder();
   wireLogbook();
+  wireBookmarks(view.map);
+  wireAbout();
   const [meta, manifest, series] = await Promise.all([loadMeta(), loadManifest(), loadSeries()]);
   state.manifest = manifest;
   band(meta, series);
@@ -134,7 +136,6 @@ async function main(): Promise<void> {
       void view.refresh();
     });
   }
-  $("lis").addEventListener("click", () => view.map.fitBounds(LIS_BBOX, { padding: 24, duration: 1200 }));
   whenLoaded(view.map, () => {
     frameChart(view.map);
     void view.refresh();

@@ -14,7 +14,7 @@
     />
   </head>
   <body class="hz">
-    <p class="updated" id="updated" aria-live="polite"></p>
+    <div class="strip"><p class="updated" id="updated" aria-live="polite"></p><a class="strip-link" href="about.html">About</a></div>
     <header class="mast">
       <a class="wordmark" href="./" aria-label="CSB Census home">
         <span class="wm-top">CSB</span>
@@ -61,10 +61,6 @@
       </div>
       <aside class="ladder" id="ladder" aria-label="Legend"></aside>
       <output class="cursor" id="cursor" aria-live="off">--</output>
-      <nav class="bookmarks" aria-label="Bookmarks">
-        <span class="bookmarks-label">Bookmarks</span>
-        <button id="lis" type="button">Long Island Sound</button>
-      </nav>
     </main>
 
     <section class="band" aria-label="The archive">
@@ -113,8 +109,22 @@
       <p class="note">
         Independent census by <a href="https://longhorizon.eco/">Long Horizon Observatory</a> from <a href="https://www.ncei.noaa.gov/">NOAA NCEI</a> /
         <a href="https://iho.int/en/data-centre-for-digital-bathymetry">IHO DCDB</a> public data, also browsable in the <a href="https://www.ncei.noaa.gov/maps/iho_dcdb/">DCDB data viewer</a>. Not for
-        navigation. <a href="https://github.com/lhzn-io/csb-census/blob/main/docs/src/methodology.md">Methodology</a> &middot; <a href="https://github.com/lhzn-io/csb-census">Code</a>
+        navigation. <a href="https://github.com/lhzn-io/csb-census/blob/main/docs/src/methodology.md">Methodology</a> &middot; <a href="about.html">About</a> &middot; <a href="https://github.com/lhzn-io/csb-census">Code</a>
       </p>
+    </aside>
+
+    <button class="logbook-tab bookmarks-tab" id="bookmarks-tab" type="button" aria-expanded="false" aria-controls="bookmarks">Bookmarks</button>
+    <aside class="logbook" id="bookmarks" hidden>
+      <h2>Bookmarks</h2>
+      <div class="bookmark-list" id="bookmark-list"></div>
+      <p class="note">Places worth a closer look. Choose one to fly the map there.</p>
+    </aside>
+
+    <button class="logbook-tab about-tab" id="about-tab" type="button" aria-expanded="false" aria-controls="about">About</button>
+    <aside class="logbook about-drawer" id="about" hidden>
+      <h2>About</h2>
+      <p class="note">To link to a term, <a href="about.html">open this as a page</a>.</p>
+      <div class="defs-body" id="about-body"><p class="note">Loading&hellip;</p></div>
     </aside>
 
     <script type="module" src="./src/archive.ts"></script>

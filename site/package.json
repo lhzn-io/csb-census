@@ -16,7 +16,8 @@
     "@deck.gl/mapbox": "9.4.0",
     "h3-js": "4.5.0",
     "hyparquet": "1.31.2",
-    "maplibre-gl": "5.24.0"
+    "maplibre-gl": "5.24.0",
+    "marked": "18.1.0"
   },
   "devDependencies": {
     "typescript": "7.0.2",
