@@ -7,4 +7,4 @@ export const DATA = "./data";
 export const LIS_BBOX: [number, number, number, number] = [-73.82, 40.84, -71.84, 41.42];
 
 /** Map zoom at which each H3 resolution takes over (see layers.py LEVELS). */
-export const RES_FOR_ZOOM = (zoom: number): 4 | 6 | 8 => (zoom < 5 ? 4 : zoom < 8 ? 6 : 8);
+export const RES_FOR_ZOOM = (zoom: number): 4 | 6 | 8 | 9 => (zoom < 5 ? 4 : zoom < 8 ? 6 : zoom < 10 ? 8 : 9);

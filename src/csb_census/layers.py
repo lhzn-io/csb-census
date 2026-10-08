@@ -35,9 +35,17 @@ from csb_census import spilhaus
 from csb_census.pipeline import CELL_RES, VDAY_RES
 from csb_census.state import State
 
-LEVELS = {4: None, 6: 1, 8: 2}  # resolution -> parent resolution used to split files
-PAD_DEG = {4: 0.3, 6: 0.05, 8: 0.01}  # about one cell edge, so tile bboxes cover whole hexagons
+PARENT = {4: None, 6: 1, 8: 2, 9: 3}  # resolution -> parent resolution used to split files
+LEVELS = {r: PARENT[r] for r in (4, 6, 8)}  # the archive levels
+PAD_DEG = {4: 0.3, 6: 0.05, 8: 0.01, 9: 0.005}  # about one cell edge, so tile bboxes cover whole hexagons
 WINDOWS = {"7d": (7, (4, 6, 8)), "30d": (30, (4, 6, 8)), "365d": (365, (4, 6))}  # collection-day windows
+LAST24_LEVELS = (4, 6, 8, 9)  # the last 24 hours of publication, down to the r9 cells recent_cells holds
+AGE_BUCKETS = [
+    ("this week", 7),
+    ("this month", 30),
+    ("this year", 365),
+]  # collection age at publication, days
+AGE_LAST, AGE_NONE = "older", "no date"
 STRIP = {"24h": 1, "7d": 7, "30d": 30, "all": None}  # publication windows, in days
 LAG_BUCKETS = [("<6h", 6), ("6-24h", 24), ("1-3d", 72), ("3-7d", 168), ("7-30d", 720), ("30-365d", 8760)]
 LAG_LAST = ">1y"
@@ -117,6 +125,55 @@ def _vessel_sql(res: int, where: str) -> str:
     """
 
 
+def load_last24h(con: duckdb.DuckDBPyConnection, state: State, now: datetime) -> None:
+    """Rows of ``recent_cells`` for files published (by file stamp) in the 24 hours before ``now``.
+
+    ``age_d`` is how long before publication each row's soundings were collected, in days (NULL when
+    the collection day is not a date). Empty when the state holds no recent cells yet.
+    """
+    path = state.path("recent_cells")
+    if path is None:
+        con.sql(
+            "CREATE OR REPLACE TEMP TABLE last24 (unique_id VARCHAR, day VARCHAR, h3 UBIGINT, "
+            "n_rows BIGINT, n_unique BIGINT, age_d DOUBLE)"
+        )
+        return
+    con.sql(
+        f"""
+        CREATE OR REPLACE TEMP TABLE last24 AS
+        SELECT unique_id, day, h3_r{CELL_RES} AS h3, n_rows, n_unique,
+               greatest(0, date_diff('minute', try_cast(day AS DATE)::TIMESTAMP, ingested) / 1440.0) AS age_d
+        FROM '{_p(path)}' WHERE ingested >= {_ts(now - timedelta(days=1))}
+        """
+    )
+
+
+def _last24_sql(res: int) -> str:
+    """Soundings, platforms and collection age per cell at ``res``, from ``last24``."""
+    return f"""
+        SELECT h3_cell_to_parent(h3, {res}) AS cell,
+               sum(n_unique)::BIGINT AS n_unique, sum(n_rows)::BIGINT AS n_published,
+               count(DISTINCT unique_id)::INTEGER AS platforms,
+               min(day) FILTER (WHERE age_d IS NOT NULL) AS first_day,
+               max(day) FILTER (WHERE age_d IS NOT NULL) AS last_day,
+               round(sum(n_rows * age_d) / nullif(sum(n_rows) FILTER (WHERE age_d IS NOT NULL), 0), 1)
+                 AS mean_age_d
+        FROM last24 WHERE h3 IS NOT NULL GROUP BY 1
+    """
+
+
+def _age_case() -> str:
+    cases = " ".join(f"WHEN age_d < {days} THEN '{name}'" for name, days in AGE_BUCKETS)
+    return f"CASE WHEN age_d IS NULL THEN '{AGE_NONE}' {cases} ELSE '{AGE_LAST}' END"
+
+
+def last24h(con: duckdb.DuckDBPyConnection) -> dict[str, Any]:
+    """When the last 24 hours' release was collected: soundings by collection age, from ``last24``."""
+    counts = dict(con.sql(f"SELECT {_age_case()}, sum(n_rows)::BIGINT FROM last24 GROUP BY 1").fetchall())
+    names = [n for n, _ in AGE_BUCKETS] + [AGE_LAST, AGE_NONE]
+    return {"buckets": names, "collected": [[n, int(counts.get(n, 0))] for n in names]}
+
+
 def _archive_sql(res: int, where: str) -> str:
     return f"""
         SELECT c.*, coalesce(v.vessel_days, 0)::INTEGER AS vessel_days,
@@ -137,7 +194,7 @@ def _write_level(
     con: duckdb.DuckDBPyConnection, cells_sql: str, res: int, dest: Path, base_url: str
 ) -> list[dict[str, Any]]:
     """Write one resolution from ``cells_sql`` (a ``cell UBIGINT`` column plus values), split by parent."""
-    parent_res = LEVELS[res]
+    parent_res = PARENT[res]
     part = f"h3_h3_to_string(h3_cell_to_parent(cell, {parent_res}))" if parent_res is not None else "'all'"
     pad = PAD_DEG[res]
     con.sql(
@@ -319,6 +376,7 @@ def _recent(con: duckdb.DuckDBPyConnection, state: State, now: datetime, provide
             "all": lag_hist("TRUE"),
         },
         "runs": {"columns": [], "rows": []},
+        "last24h": last24h(con),
     }
     runs = state.path("runs")
     if runs is not None:
@@ -386,6 +444,13 @@ def build(
             for res in levels
             for t in _write_level(con, _vessel_sql(res, where), res, out / base / f"r{res}", base)
         ]
+    load_last24h(con, state, now)
+    base = "layers/recent/24h"
+    manifest["windows"]["24h"] = [
+        t
+        for res in LAST24_LEVELS
+        for t in _write_level(con, _last24_sql(res), res, out / base / f"r{res}", base)
+    ]
     if providers:
         manifest["providers"] = {}
         for (name,) in con.sql("SELECT DISTINCT provider FROM cells ORDER BY 1").fetchall():

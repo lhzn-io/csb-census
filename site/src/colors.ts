@@ -43,6 +43,29 @@ export function uniqueColor(n: number, maxExp: number): RGBA {
   return ramp(COUNTS, t, Math.round(45 + 190 * t));
 }
 
+/**
+ * Freshness, for the last 24 hours of publication: how long before publication a cell's soundings
+ * were collected sets its opacity (the color stays the soundings ramp). Steps match the census's
+ * AGE_BUCKETS; a cell with no valid collection date fades like the oldest.
+ */
+export const AGE_STEPS: { label: string; maxDays: number; alpha: number }[] = [
+  { label: "this week", maxDays: 7, alpha: 245 },
+  { label: "this month", maxDays: 30, alpha: 165 },
+  { label: "this year", maxDays: 365, alpha: 100 },
+  { label: "older", maxDays: Infinity, alpha: 55 },
+];
+
+export function ageAlpha(ageDays: number | null | undefined): number {
+  if (ageDays == null) return AGE_STEPS[AGE_STEPS.length - 1].alpha;
+  return (AGE_STEPS.find((s) => ageDays < s.maxDays) ?? AGE_STEPS[AGE_STEPS.length - 1]).alpha;
+}
+
+/** Soundings color with the count ramp's own low-count fade replaced by freshness (or solid, unfaded). */
+export function freshColor(n: number, maxExp: number, ageDays: number | null | undefined, fade: boolean): RGBA {
+  const [r, g, b] = uniqueColor(n, maxExp);
+  return [r, g, b, fade ? ageAlpha(ageDays) : 235];
+}
+
 export function dupColor(share: number): RGBA {
   return ramp(DUP, share, 210);
 }

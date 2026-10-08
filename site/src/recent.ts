@@ -1,32 +1,87 @@
 /** Recent activity: what NCEI published lately, and where boats have been. */
 import { $, frameChart, renderUpdated, renderColumns, renderHorizon, renderLadder, renderReadouts, renderReflection, setFavicon, table, wireLogbook, YELLOW } from "./chartroom";
-import { RECENT_BINS, binColor } from "./colors";
+import { AGE_STEPS, RECENT_BINS, binColor, freshColor, type RGBA } from "./colors";
 import { createMapView, whenLoaded } from "./mapview";
 import { compact, loadMeta } from "./metrics";
 import { column, epochs, hours, loadRecent, type Recent, type WindowName } from "./recentdata";
 import { loadManifest, type Cell, type LayerManifest } from "./tiles";
 
-type MapWindow = "7d" | "30d" | "365d";
-const WINDOW_TEXT: Record<MapWindow, string> = { "7d": "last 7 days", "30d": "last 30 days", "365d": "last 12 months" };
+/** "24h" is by publication (what NCEI released); the others are by collection day. */
+type MapWindow = "24h" | "7d" | "30d" | "365d";
+const WINDOW_TEXT: Record<MapWindow, string> = {
+  "24h": "published in the last 24 hours",
+  "7d": "collected in the last 7 days",
+  "30d": "collected in the last 30 days",
+  "365d": "collected in the last 12 months",
+};
+/** One soundings scale for every level of the 24h map, so the legend holds at any zoom. */
+const MAX_EXP_24H = 5;
 
-const state = { window: "30d" as MapWindow, manifest: null as LayerManifest | null };
+const state = {
+  window: "24h" as MapWindow,
+  fade: true,
+  manifest: null as LayerManifest | null,
+  recent: null as Recent | null,
+};
+
+function collectedText(c: Cell): string {
+  if (!c.first_day) return "no valid collection date";
+  return c.first_day === c.last_day ? `collected ${c.first_day}` : `collected ${c.first_day} to ${c.last_day}`;
+}
 
 const view = createMapView({
   container: "map",
   basemap: "dark",
   storageKey: "csb-census:basemap:recent",
   pool: () => state.manifest?.windows?.[state.window] ?? [],
-  color: (d) => binColor(d.vessel_days, RECENT_BINS),
-  colorKey: () => state.window,
+  color: (d) =>
+    state.window === "24h" ? freshColor(d.n_unique, MAX_EXP_24H, d.mean_age_d, state.fade) : binColor(d.vessel_days ?? 0, RECENT_BINS),
+  colorKey: () => `${state.window}:${state.fade}`,
   tooltip: (c: Cell) =>
-    [
-      `${c.vessel_days} vessel-day${c.vessel_days === 1 ? "" : "s"}, ${WINDOW_TEXT[state.window]}`,
-      `${c.platforms} platform${c.platforms === 1 ? "" : "s"}`,
-      `${compact(c.n_unique)} unique of ${compact(c.n_published)} soundings`,
-    ].join("\n"),
+    (state.window === "24h"
+      ? [
+          `${compact(c.n_unique)} unique of ${compact(c.n_published)} soundings, ${WINDOW_TEXT["24h"]}`,
+          `${c.platforms} platform${c.platforms === 1 ? "" : "s"}`,
+          collectedText(c),
+        ]
+      : [
+          `${c.vessel_days} vessel-day${c.vessel_days === 1 ? "" : "s"}, ${WINDOW_TEXT[state.window]}`,
+          `${c.platforms} platform${c.platforms === 1 ? "" : "s"}`,
+          `${compact(c.n_unique)} unique of ${compact(c.n_published)} soundings`,
+        ]
+    ).join("\n"),
 });
 
+/** The 24h fade key, each step with its share of the release (undated soundings count with the oldest). */
+function fadeKey(): { title: string; steps: [RGBA, string][] } {
+  const got = new Map(state.recent?.last24h?.collected ?? []);
+  const total = [...got.values()].reduce((a, b) => a + b, 0);
+  const share = (labels: string[]): string => {
+    if (!total) return "";
+    const n = labels.reduce((a, l) => a + (got.get(l) ?? 0), 0);
+    const pct = (100 * n) / total;
+    return ` <span class="pct">${pct > 0 && pct < 1 ? "<1" : Math.round(pct)}%</span>`;
+  };
+  const [r, g, b] = freshColor(1000, MAX_EXP_24H, 0, true);
+  const toggle = `<button type="button" class="ladder-toggle" id="fade-toggle" aria-pressed="${state.fade}">Fade ${state.fade ? "on" : "off"}</button>`;
+  return {
+    title: `Collected ${toggle}`,
+    steps: AGE_STEPS.map((s, i) => [
+      [r, g, b, state.fade ? s.alpha : 235] as RGBA, // with the fade off, the map (and so the key) is solid
+      `${s.label}${share(i === AGE_STEPS.length - 1 ? [s.label, "no date"] : [s.label])}`,
+    ]),
+  };
+}
+
 function ladder(): void {
+  if (state.window === "24h") {
+    const steps: [RGBA, string][] = [0, 1, 2, 3, 4, 5].map((k) => [
+      freshColor(10 ** k, MAX_EXP_24H, 0, true),
+      k === MAX_EXP_24H ? `${compact(10 ** k)}+` : compact(10 ** k),
+    ]);
+    renderLadder(`Unique soundings per cell · ${WINDOW_TEXT["24h"]}`, steps, fadeKey());
+    return;
+  }
   const e = RECENT_BINS.edges;
   renderLadder(
     `Vessel-days per cell · ${WINDOW_TEXT[state.window]}`,
@@ -83,6 +138,8 @@ async function main(): Promise<void> {
   wireLogbook();
   const [recent, manifest, meta] = await Promise.all([loadRecent(), loadManifest(), loadMeta()]);
   state.manifest = manifest;
+  state.recent = recent;
+  ladder();
   const batches = recent.batches;
   const last7 = column(batches, "unique").slice(-7).reverse();
   renderReflection(last7, "unique soundings, last 7 batches");
@@ -112,6 +169,13 @@ async function main(): Promise<void> {
       void view.refresh();
     });
   }
+  // The fade switch lives in the legend, which is redrawn on every change, so listen on the legend itself.
+  $("ladder").addEventListener("click", (e) => {
+    if (!(e.target instanceof HTMLElement) || e.target.id !== "fade-toggle") return;
+    state.fade = !state.fade;
+    ladder();
+    void view.refresh();
+  });
   whenLoaded(view.map, () => {
     frameChart(view.map);
     void view.refresh();

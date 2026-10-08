@@ -1,7 +1,7 @@
 """Published layers: rollups preserve counts, tiles cover their cells, provider views stay gated."""
 
 import json
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
 
 import duckdb
@@ -92,7 +92,7 @@ def test_window_layers_hold_only_days_in_the_window(
     out = tmp_path / "site-data"
     layers.build(con, state, out, now=datetime(2026, 9, 6, 12, tzinfo=UTC))
     manifest = json.loads((out / "layers" / "manifest.json").read_text())
-    assert set(manifest["windows"]) == {"7d", "30d", "365d"}
+    assert set(manifest["windows"]) == {"7d", "30d", "365d", "24h"}
     keys = vdays_of_state(con, state)
     for name, days in (("7d", {"2026-08-31"}), ("30d", {"2026-08-30", "2026-08-31"})):
         want = len({(p, d, h3_parent(con, h, 4)) for p, d, h in keys if d in days})
@@ -129,6 +129,37 @@ def test_recent_strip_counts_by_publication(
     layers.build(con, state, full, providers=True, now=datetime(2026, 9, 3, 12, tzinfo=UTC))
     by = json.loads((full / "recent.json").read_text())["providers"]
     assert sum(p["all"]["published"] for p in by.values()) == 18
+
+
+def test_last_24h_maps_what_was_published(
+    con: duckdb.DuckDBPyConnection,
+    state: State,
+    tmp_path: Path,
+) -> None:
+    out = tmp_path / "site-data"
+    layers.build(con, state, out, now=datetime(2026, 9, 3, 12, tzinfo=UTC))
+    manifest = json.loads((out / "layers" / "manifest.json").read_text())
+    assert {t["res"] for t in manifest["windows"]["24h"]} == set(layers.LAST24_LEVELS)
+    assert set(manifest["levels"]) == {"4", "6", "8"}  # the archive levels are unchanged
+    # Since 2026-09-02 12:00: B (resend of A), F, G (double ingest of F) and H; unique: F1, F2, S6.
+    for res in layers.LAST24_LEVELS:
+        assert totals(con, out / f"layers/recent/24h/r{res}" / "*" / "*.parquet") == (9, 3)
+    glob = (out / "layers/recent/24h/r9/*/*.parquet").as_posix()
+    for first, last, age in con.sql(f"SELECT first_day, last_day, mean_age_d FROM '{glob}'").fetchall():
+        assert first <= last
+        # Every file was stamped between 09-03 00:00 and 02:00; ages are rounded to 0.1 day.
+        assert (date(2026, 9, 3) - date.fromisoformat(last)).days - 0.05 <= age
+        assert age <= (date(2026, 9, 3) - date.fromisoformat(first)).days + 2 / 24 + 0.05
+
+    recent = json.loads((out / "recent.json").read_text())
+    collected = dict(recent["last24h"]["collected"])
+    assert collected == {"this week": 9, "this month": 0, "this year": 0, "older": 0, "no date": 0}
+    assert sum(collected.values()) == recent["strip"]["24h"]["published"]
+
+    later = tmp_path / "later"
+    layers.build(con, state, later, now=datetime(2026, 9, 5, tzinfo=UTC))
+    assert json.loads((later / "layers" / "manifest.json").read_text())["windows"]["24h"] == []
+    assert sum(n for _, n in json.loads((later / "recent.json").read_text())["last24h"]["collected"]) == 0
 
 
 def test_meta_reports_latency_behind_ncei(

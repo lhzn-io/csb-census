@@ -75,11 +75,12 @@ export function frameChart(map: MapLibreMap): void {
 
 /* ---------- Legend ladder: bins read bottom (sparse) to top (busy) ---------- */
 
-export function renderLadder(title: string, steps: [RGBA, string][]): void {
-  const rows = steps
-    .map(([[r, g, b, a], text]) => `<div class="ladder-step"><i style="background:rgba(${r},${g},${b},${a / 255})"></i>${text}</div>`)
-    .join("");
-  $("ladder").innerHTML = `<span class="ladder-title">${title}</span><div class="ladder-steps">${rows}</div>`;
+/** The legend ladder; `extra` is a second block of steps beside it (the 24h fade key, with its shares). */
+export function renderLadder(title: string, steps: [RGBA, string][], extra?: { title: string; steps: [RGBA, string][] }): void {
+  const rows = (s: [RGBA, string][]): string =>
+    s.map(([[r, g, b, a], text]) => `<div class="ladder-step"><i style="background:rgba(${r},${g},${b},${a / 255})"></i>${text}</div>`).join("");
+  const more = extra ? `<div class="ladder-extra"><span class="ladder-subtitle">${extra.title}</span><div class="ladder-steps">${rows(extra.steps)}</div></div>` : "";
+  $("ladder").innerHTML = `<span class="ladder-title">${title}</span><div class="ladder-steps">${rows(steps)}</div>${more}`;
 }
 
 /* ---------- Masthead reflection: the wordmark's water lines, drawn from data (newest first) ---------- */

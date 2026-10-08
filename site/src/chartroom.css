@@ -143,6 +143,16 @@ a { color: inherit; }
 .ladder-steps { display: flex; flex-direction: column-reverse; gap: 3px; }
 .ladder-step { display: flex; align-items: center; gap: 7px; font-family: var(--mono); font-size: 10px; }
 .ladder-step i { display: block; width: 22px; height: 12px; border-radius: 1px; }
+/* The 24h fade key: same steps, read top (fresh) to bottom (old), with a small heading above. */
+.ladder-extra { display: flex; flex-direction: column; gap: 5px; margin-left: 8px; padding-left: 12px; border-left: 1px solid var(--rule); }
+.ladder-extra .ladder-steps { flex-direction: column; }
+.ladder-subtitle { font-size: 9px; font-weight: 700; letter-spacing: 0.2em; text-transform: uppercase; color: var(--dim); }
+.ladder-step .pct { color: var(--dim); margin-left: 2px; }
+.ladder-toggle {
+  margin-left: 6px; padding: 1px 7px 2px; border: 1px solid var(--rule); border-radius: 999px; cursor: pointer;
+  background: transparent; color: var(--dim); font: 700 8.5px/1.4 var(--sans); letter-spacing: 0.18em; text-transform: uppercase;
+}
+.ladder-toggle:hover, .ladder-toggle[aria-pressed="true"] { color: var(--yellow); border-color: rgba(222, 207, 3, 0.55); }
 
 /* Horizon band: the brand's slate sky, with the data drawn as the horizon. */
 .band {

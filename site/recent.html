@@ -33,11 +33,12 @@
             <span class="tab active" aria-current="page">Recent</span>
           </div>
         </div>
-        <div class="tabgroup" role="radiogroup" aria-label="Collected in">
-          <span class="tabgroup-label">Collected in</span>
+        <div class="tabgroup" role="radiogroup" aria-label="Map">
+          <span class="tabgroup-label">Map</span>
           <div class="tabgroup-row">
+            <label class="tab"><input type="radio" name="window" value="24h" checked />24 hours</label>
             <label class="tab"><input type="radio" name="window" value="7d" />7 days</label>
-            <label class="tab"><input type="radio" name="window" value="30d" checked />30 days</label>
+            <label class="tab"><input type="radio" name="window" value="30d" />30 days</label>
             <label class="tab"><input type="radio" name="window" value="365d" />12 months</label>
           </div>
         </div>
@@ -52,7 +53,7 @@
     </header>
 
     <main class="chart">
-      <div id="map" aria-label="Map of recent vessel-days"></div>
+      <div id="map" aria-label="Map of recent soundings and vessel-days"></div>
       <div class="neat" aria-hidden="true">
         <div class="ticks ticks-top" id="ticks-top"></div>
         <div class="ticks ticks-bottom" id="ticks-bottom"></div>

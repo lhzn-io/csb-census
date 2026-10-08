@@ -26,7 +26,7 @@ It is the community-measurement companion to `lhzn-io/csb-trusted-node`.
 | `src/csb_census/pipeline.py` | `read_keyed`, `stage` (pass 1), `rank` (pass 2), `finalize`. The identity SQL is defined only here |
 | `src/csb_census/state.py` | Versioned state (Parquet tables plus manifest), mirrored to the `state` release with a generation check |
 | `src/csb_census/incremental.py` | `seed`, `run` (6-hourly), `reconcile` (daily), `AsOfSource` for replays |
-| `src/csb_census/layers.py` | Published dashboard data: H3 layers (with vessel-days), recent-window layers, manifest, `meta.json`, `timeseries_month.json`, `recent.json` |
+| `src/csb_census/layers.py` | Published dashboard data: H3 layers (with vessel-days), recent-window layers (collection windows, plus the last 24 hours of publication at r9), manifest, `meta.json`, `timeseries_month.json`, `recent.json` |
 | `src/csb_census/spilhaus.py` | The landing map: the r4 layer projected into the world-ocean square for each center (`CENTERS`), via pyproj's `spilhaus` |
 | `src/csb_census/lis.py` | Regional analysis (Long Island Sound): r9 layer and summary; `extract` of originals at r10 on garnet |
 | `src/csb_census/cli.py` | `backfill`, `rank`, `seed`, `incremental`, `reconcile`, `replay`, `state pull/push`, `layers`, `lis extract` |

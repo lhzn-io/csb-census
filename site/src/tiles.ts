@@ -2,19 +2,23 @@ import { asyncBufferFromUrl, parquetReadObjects } from "hyparquet";
 import { DATA } from "./config";
 
 /**
- * One hexagon. Archive layers carry every field; window layers (recent vessel-days) carry
- * h3, vessel_days, platforms, n_unique and n_published only.
+ * One hexagon. Archive layers carry every field; collection-window layers (recent vessel-days) carry
+ * h3, vessel_days, platforms, n_unique and n_published; the 24h layer carries h3, n_unique,
+ * n_published, platforms, first_day, last_day and mean_age_d.
  */
 export interface Cell {
   h3: string;
   n_unique: number;
   n_published: number;
-  vessel_days: number;
+  vessel_days?: number;
   platforms: number;
   dup_share?: number;
   n_providers?: number;
   first_year?: number;
   last_year?: number;
+  first_day?: string | null;
+  last_day?: string | null;
+  mean_age_d?: number | null;
 }
 
 export interface Tile {

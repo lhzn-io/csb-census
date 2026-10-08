@@ -26,6 +26,8 @@ export interface Recent {
   daily_coll: Table;
   lag_hist: { buckets: string[]; last_30d: [string, number][]; all: [string, number][] };
   runs: Table;
+  /** The last 24 hours of publication: soundings by how long before publication they were collected. */
+  last24h?: { buckets: string[]; collected: [string, number][] };
   providers?: Record<string, Record<WindowName, StripWindow>>;
 }
 
