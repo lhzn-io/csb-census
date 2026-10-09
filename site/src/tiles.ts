@@ -19,6 +19,9 @@ export interface Cell {
   first_day?: string | null;
   last_day?: string | null;
   mean_age_d?: number | null;
+  underway_h?: number;
+  stationary_h?: number;
+  first_month?: string | null;
 }
 
 export interface Tile {

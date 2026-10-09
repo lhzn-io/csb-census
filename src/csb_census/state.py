@@ -37,6 +37,8 @@ TABLES = (
     "recent_cells",
     "vdays_base",
     "vdays_delta",
+    "uw_base",
+    "uw_delta",
     "pending",
     "queue",
     "runs",

@@ -53,6 +53,27 @@ at resolution 8 (about 0.7 km²); on coarser maps, a vessel-day counts once per
 cell however far the vessel moved inside it. Vessel-days measure how many boats
 were somewhere, where sounding counts mostly measure how long loggers ran.
 
+### Underway and stationary
+
+Whether a vessel was moving while it logged. Each platform's soundings are
+averaged into one position per minute, and each minute is classed by the speed
+from the minute before: **underway** at 2 knots or more, **slow** from 0.5 to
+2 knots, **stationary** under 0.5 knots. Loggers often keep recording at the
+dock or at anchor. That is not a fault, but it means sounding counts and
+vessel-days include time when nothing new was being mapped.
+
+### Underway time
+
+The minutes a platform logged while underway, summed per cell. It is the
+census's measure of traffic: effort spent actually moving through a place.
+
+### Reach
+
+New ground: H3 cells at resolution 8 covered for the first time, by the month
+their earliest sounding was collected. Divided by underway time, it gives new
+cells per hour underway, which any skipper can raise by taking a different
+route home.
+
 ### Cell
 
 A hexagon of Uber's [H3](https://h3geo.org/) grid. The maps switch resolution

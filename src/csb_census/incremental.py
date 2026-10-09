@@ -32,6 +32,7 @@ import duckdb
 from csb_census.inventory import CSV_PREFIX, ObjectSource, S3Object, day_prefix
 from csb_census.pipeline import CELL_RES, TALLIES, VDAY_RES, file_meta_sql, h3_cell, read_keyed, vday_sql
 from csb_census.state import TABLES, State
+from csb_census.underway import UW_COLUMNS, UW_RES, classify_files, keep_groups_sql, minutes_sql, underway_sql
 
 log = logging.getLogger(__name__)
 
@@ -51,6 +52,8 @@ DDL = {
     "vdays_base": f"provider VARCHAR, platform VARCHAR, day VARCHAR, h3_r{VDAY_RES} UBIGINT, {COUNTS}",
     "vdays_delta": f"""provider VARCHAR, platform VARCHAR, day VARCHAR, h3_r{VDAY_RES} UBIGINT, {COUNTS},
         run_id VARCHAR""",
+    "uw_base": UW_COLUMNS,
+    "uw_delta": f"{UW_COLUMNS}, file VARCHAR, run_id VARCHAR",
     "pending": "key VARCHAR, etag VARCHAR, seen_at TIMESTAMP",
     "queue": "provider VARCHAR, coll_month VARCHAR, reason VARCHAR, queued_at TIMESTAMP",
     "runs": f"""run_id VARCHAR, kind VARCHAR, run_at TIMESTAMP, generation BIGINT, new_files BIGINT, {COUNTS},
@@ -343,6 +346,19 @@ def _run(
         """
     )
     con.sql(f"INSERT INTO vdays_delta BY NAME SELECT *, '{run_id}' AS run_id FROM ({vday_sql('cls')})")
+    # Underway time: tracks of the new groups that hold unique soundings (resends add no time).
+    con.sql(
+        """
+        CREATE OR REPLACE TEMP TABLE uw_keep AS
+        SELECT file, UNIQUE_ID AS unique_id FROM cls GROUP BY ALL
+        HAVING count(*) FILTER (WHERE class = 'unique') > 0
+        """
+    )
+    con.sql(f"CREATE OR REPLACE TEMP TABLE uw_min AS {minutes_sql('new_rows', 'uw_keep')}")
+    con.sql(
+        f"INSERT INTO uw_delta BY NAME SELECT *, '{run_id}' AS run_id "
+        f"FROM ({underway_sql('uw_min', with_file=True)})"
+    )
     cutoff = now - timedelta(days=RECENT_DAYS)
     con.sql(f"DELETE FROM recent_cells WHERE ingested < TIMESTAMP '{cutoff:%Y-%m-%d %H:%M:%S}'")
     con.sql(
@@ -378,7 +394,16 @@ def _run(
         newest_published=max(o.last_modified for o in selected).astimezone(UTC).replace(tzinfo=None),
     )
 
-    changed = ("file_index", "file_months", "cells_delta", "recent_cells", "vdays_delta", "pending", "runs")
+    changed = (
+        "file_index",
+        "file_months",
+        "cells_delta",
+        "recent_cells",
+        "vdays_delta",
+        "uw_delta",
+        "pending",
+        "runs",
+    )
     manifest = state.commit(
         save_tables(con, changed, work / "out"),
         max_ingested=newest_ingested,
@@ -463,6 +488,19 @@ def reconcile(
         GROUP BY ALL
         """
     )
+    # Underway time is held per file in uw_delta, so a removed file published since the seed comes out
+    # exactly. Groups in uw_base hold unique soundings, so the queue below already covers their months.
+    con.sql(
+        f"""
+        INSERT INTO uw_delta BY NAME
+        SELECT file, provider, platform, day, h3_r{UW_RES},
+               -sum(min_underway) AS min_underway, -sum(min_slow) AS min_slow,
+               -sum(min_stationary) AS min_stationary, -sum(min_other) AS min_other,
+               -sum(n_soundings) AS n_soundings, 'reconcile-{now:%Y%m%dT%H%M}' AS run_id
+        FROM uw_delta u SEMI JOIN gone g ON g.file = u.file AND g.unique_id = u.platform
+        GROUP BY ALL
+        """
+    )
     con.sql(
         f"""
         INSERT INTO queue BY NAME
@@ -502,7 +540,16 @@ def reconcile(
         (0, 0, 0, 0),
         removed=int(removed),
     )
-    changed = ("file_index", "cells_delta", "recent_cells", "vdays_delta", "pending", "queue", "runs")
+    changed = (
+        "file_index",
+        "cells_delta",
+        "recent_cells",
+        "vdays_delta",
+        "uw_delta",
+        "pending",
+        "queue",
+        "runs",
+    )
     manifest = state.commit(save_tables(con, changed, work / "out"))
     result = ReconcileResult(
         manifest.generation, listed, int(removed), int(republished), newly_pending, queued
@@ -573,3 +620,82 @@ def seed(
         max_ingested=newest.isoformat() if newest else None,
     )
     return manifest.generation
+
+
+@dataclass(frozen=True)
+class UnderwaySeed:
+    generation: int
+    cached_chunks: int
+    classified_files: int
+    rows: int
+    underway_minutes: int
+    stationary_minutes: int
+
+
+def seed_underway(
+    con: duckdb.DuckDBPyConnection,
+    state: State,
+    minutes: Path,
+    source: ObjectSource,
+    *,
+    work: Path,
+    chunk_files: int = 15_000,
+) -> UnderwaySeed:
+    """Rebuild ``uw_base`` for every live group with unique soundings, and empty ``uw_delta``.
+
+    ``minutes`` is a cache of minute rows (``*.parquet``, as written by ``underway.classify_files``).
+    Files the cache does not cover are downloaded and classified into new chunks there, so an empty
+    cache classifies the whole archive and a re-run resumes. Rows of files no longer live are ignored.
+    """
+    load_state(con, state)
+    minutes.mkdir(parents=True, exist_ok=True)
+    con.sql(f"CREATE OR REPLACE TEMP TABLE uw_keep AS {keep_groups_sql('file_index')}")
+    cached = sorted(minutes.glob("*.parquet"))
+    covered = "(SELECT NULL::VARCHAR AS file WHERE false)"
+    if cached:
+        covered = f"(SELECT DISTINCT file FROM read_parquet('{_p(minutes / '*.parquet')}'))"
+    missing = con.sql(
+        f"""
+        SELECT DISTINCT i.key, i.size, coalesce(i.published_at, i.ingested) AS t
+        FROM file_index i SEMI JOIN uw_keep k ON k.file = i.file AND k.unique_id = i.unique_id
+        WHERE i.key IS NOT NULL AND i.file NOT IN {covered}
+        ORDER BY i.key
+        """
+    ).fetchall()
+    log.info("underway seed: %d cached chunks, %d files to classify", len(cached), len(missing))
+    stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%S")
+    for n, start in enumerate(range(0, len(missing), chunk_files)):
+        chunk = missing[start : start + chunk_files]
+        objects = [S3Object(k, int(s or 0), t.replace(tzinfo=UTC)) for k, s, t in chunk]
+        tmp = work / "uw-csv"
+        paths = source.fetch(objects, tmp)
+        classify_files(con, paths, "uw_keep", minutes / f"gap_{stamp}_{n:05d}.parquet")
+        shutil.rmtree(tmp, ignore_errors=True)
+        log.info(
+            "underway seed: classified %d of %d files", min(start + chunk_files, len(missing)), len(missing)
+        )
+
+    con.sql("DELETE FROM uw_base")
+    con.sql("DELETE FROM uw_delta")
+    if any(minutes.glob("*.parquet")):
+        con.sql(
+            f"""
+            CREATE OR REPLACE TEMP TABLE uw_min AS
+            SELECT m.* FROM read_parquet('{_p(minutes / "*.parquet")}') m
+            SEMI JOIN uw_keep k ON k.file = m.file AND k.unique_id = m.platform
+            """
+        )
+        con.sql(f"INSERT INTO uw_base BY NAME {underway_sql('uw_min')}")
+    totals = con.sql("SELECT count(*), sum(min_underway), sum(min_stationary) FROM uw_base").fetchone()
+    assert totals is not None
+    manifest = state.commit(save_tables(con, ("uw_base", "uw_delta"), work / "out"))
+    result = UnderwaySeed(
+        manifest.generation,
+        len(cached),
+        len(missing),
+        int(totals[0]),
+        int(totals[1] or 0),
+        int(totals[2] or 0),
+    )
+    log.info("underway seed: %s", result)
+    return result

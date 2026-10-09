@@ -25,7 +25,7 @@ Two clocks are used, and every output says which: *publication* is the NCEI file
 import json
 import re
 import shutil
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -34,6 +34,7 @@ import duckdb
 from csb_census import spilhaus
 from csb_census.pipeline import CELL_RES, VDAY_RES
 from csb_census.state import State
+from csb_census.underway import UW_RES
 
 PARENT = {4: None, 6: 1, 8: 2, 9: 3}  # resolution -> parent resolution used to split files
 LEVELS = {r: PARENT[r] for r in (4, 6, 8)}  # the archive levels
@@ -125,6 +126,54 @@ def _vessel_sql(res: int, where: str) -> str:
     """
 
 
+def load_underway(con: duckdb.DuckDBPyConnection, state: State) -> None:
+    """Logged minutes per (provider, platform, collection day, r8) by speed class: base plus deltas.
+
+    Empty for a state without underway tables (seeded before ``csb-census underway seed``).
+    """
+    src = _base_plus_delta(state, "uw_base", "uw_delta")
+    if src is None:
+        con.sql(
+            "CREATE OR REPLACE TEMP TABLE uw (provider VARCHAR, platform VARCHAR, day VARCHAR, h3 UBIGINT, "
+            "min_underway BIGINT, min_slow BIGINT, min_stationary BIGINT, min_other BIGINT)"
+        )
+        return
+    # A key stays while any minute class is logged, so a platform-day with only slow minutes still counts.
+    con.sql(
+        f"""
+        CREATE OR REPLACE TEMP TABLE uw AS
+        SELECT provider, platform, day, h3_r{UW_RES} AS h3,
+               sum(min_underway)::BIGINT AS min_underway, sum(min_slow)::BIGINT AS min_slow,
+               sum(min_stationary)::BIGINT AS min_stationary, sum(min_other)::BIGINT AS min_other
+        FROM ({src})
+        GROUP BY provider, platform, day, h3_r{UW_RES}
+        HAVING sum(min_underway) <> 0 OR sum(min_slow) <> 0 OR sum(min_stationary) <> 0 OR sum(min_other) <> 0
+        """
+    )
+
+
+def _uw_sql(res: int, where: str, table: str = "uw") -> str:
+    """Underway and stationary hours per cell at ``res``."""
+    return f"""
+        SELECT h3_cell_to_parent(h3, {res}) AS cell,
+               round(sum(min_underway) / 60.0, 2) AS underway_h,
+               round(sum(min_stationary) / 60.0, 2) AS stationary_h
+        FROM {table} {where} GROUP BY 1
+    """
+
+
+def _window_sql(res: int, where: str) -> str:
+    """A collection window's cells: vessel-days, platforms and soundings, with underway hours."""
+    return f"""
+        SELECT coalesce(v.cell, u.cell) AS cell,
+               coalesce(v.vessel_days, 0)::INTEGER AS vessel_days,
+               coalesce(v.platforms, 0)::INTEGER AS platforms,
+               coalesce(v.n_unique, 0)::BIGINT AS n_unique, coalesce(v.n_published, 0)::BIGINT AS n_published,
+               coalesce(u.underway_h, 0) AS underway_h, coalesce(u.stationary_h, 0) AS stationary_h
+        FROM ({_vessel_sql(res, where)}) v FULL JOIN ({_uw_sql(res, where)}) u USING (cell)
+    """
+
+
 def load_last24h(con: duckdb.DuckDBPyConnection, state: State, now: datetime) -> None:
     """Rows of ``recent_cells`` for files published (by file stamp) in the 24 hours before ``now``.
 
@@ -132,33 +181,47 @@ def load_last24h(con: duckdb.DuckDBPyConnection, state: State, now: datetime) ->
     the collection day is not a date). Empty when the state holds no recent cells yet.
     """
     path = state.path("recent_cells")
+    uw_delta = state.path("uw_delta")
+    # Underway minutes of the same files: uw_delta keeps them per file for everything since the seed.
+    con.sql("CREATE OR REPLACE TEMP TABLE uw24 (h3 UBIGINT, min_underway BIGINT, min_stationary BIGINT)")
     if path is None:
         con.sql(
             "CREATE OR REPLACE TEMP TABLE last24 (unique_id VARCHAR, day VARCHAR, h3 UBIGINT, "
             "n_rows BIGINT, n_unique BIGINT, age_d DOUBLE)"
         )
         return
+    since = _ts(now - timedelta(days=1))
     con.sql(
         f"""
         CREATE OR REPLACE TEMP TABLE last24 AS
         SELECT unique_id, day, h3_r{CELL_RES} AS h3, n_rows, n_unique,
                greatest(0, date_diff('minute', try_cast(day AS DATE)::TIMESTAMP, ingested) / 1440.0) AS age_d
-        FROM '{_p(path)}' WHERE ingested >= {_ts(now - timedelta(days=1))}
+        FROM '{_p(path)}' WHERE ingested >= {since}
         """
     )
+    if uw_delta is not None:
+        con.sql(
+            f"""
+            INSERT INTO uw24
+            SELECT u.h3_r{UW_RES}, u.min_underway, u.min_stationary FROM '{_p(uw_delta)}' u
+            SEMI JOIN (SELECT DISTINCT file FROM '{_p(path)}' WHERE ingested >= {since}) f ON f.file = u.file
+            """
+        )
 
 
 def _last24_sql(res: int) -> str:
-    """Soundings, platforms and collection age per cell at ``res``, from ``last24``."""
+    """Soundings, platforms, collection age and underway hours per cell at ``res``, from ``last24``."""
     return f"""
-        SELECT h3_cell_to_parent(h3, {res}) AS cell,
-               sum(n_unique)::BIGINT AS n_unique, sum(n_rows)::BIGINT AS n_published,
-               count(DISTINCT unique_id)::INTEGER AS platforms,
-               min(day) FILTER (WHERE age_d IS NOT NULL) AS first_day,
-               max(day) FILTER (WHERE age_d IS NOT NULL) AS last_day,
-               round(sum(n_rows * age_d) / nullif(sum(n_rows) FILTER (WHERE age_d IS NOT NULL), 0), 1)
-                 AS mean_age_d
-        FROM last24 WHERE h3 IS NOT NULL GROUP BY 1
+        SELECT c.*, coalesce(u.underway_h, 0) AS underway_h FROM (
+          SELECT h3_cell_to_parent(h3, {res}) AS cell,
+                 sum(n_unique)::BIGINT AS n_unique, sum(n_rows)::BIGINT AS n_published,
+                 count(DISTINCT unique_id)::INTEGER AS platforms,
+                 min(day) FILTER (WHERE age_d IS NOT NULL) AS first_day,
+                 max(day) FILTER (WHERE age_d IS NOT NULL) AS last_day,
+                 round(sum(n_rows * age_d) / nullif(sum(n_rows) FILTER (WHERE age_d IS NOT NULL), 0), 1)
+                   AS mean_age_d
+          FROM last24 WHERE h3 IS NOT NULL GROUP BY 1
+        ) c LEFT JOIN ({_uw_sql(res, "", "uw24")}) u USING (cell)
     """
 
 
@@ -177,16 +240,19 @@ def last24h(con: duckdb.DuckDBPyConnection) -> dict[str, Any]:
 def _archive_sql(res: int, where: str) -> str:
     return f"""
         SELECT c.*, coalesce(v.vessel_days, 0)::INTEGER AS vessel_days,
-               coalesce(v.platforms, 0)::INTEGER AS platforms
+               coalesce(v.platforms, 0)::INTEGER AS platforms,
+               coalesce(u.underway_h, 0) AS underway_h, coalesce(u.stationary_h, 0) AS stationary_h
         FROM (
           SELECT h3_cell_to_parent(h3, {res}) AS cell,
                  sum(n_unique)::BIGINT AS n_unique, sum(n_rows)::BIGINT AS n_published,
                  round(1 - sum(n_unique) / sum(n_rows), 4) AS dup_share,
                  count(DISTINCT provider)::INTEGER AS n_providers,
                  min(left(coll_month, 4))::INTEGER AS first_year,
-                 max(left(coll_month, 4))::INTEGER AS last_year
+                 max(left(coll_month, 4))::INTEGER AS last_year,
+                 min(coll_month) AS first_month
           FROM cells {where} GROUP BY 1
         ) c LEFT JOIN ({_vessel_sql(res, where)}) v USING (cell)
+        LEFT JOIN ({_uw_sql(res, where)}) u USING (cell)
     """
 
 
@@ -407,6 +473,49 @@ def _recent(con: duckdb.DuckDBPyConnection, state: State, now: datetime, provide
     return recent
 
 
+def underway_meta(con: duckdb.DuckDBPyConnection, today: date) -> dict[str, Any]:
+    """Archive-wide underway and stationary hours, platform-days never underway, and recent Reach."""
+    row = con.sql(
+        """
+        SELECT round(sum(mu) / 60.0), round(sum(ms) / 60.0), count(*), count(*) FILTER (WHERE mu = 0)
+        FROM (SELECT platform, day, sum(min_underway) AS mu, sum(min_stationary) AS ms FROM uw GROUP BY ALL)
+        """
+    ).fetchone()
+    assert row is not None
+    since = f"{today.year - 1:04d}-{today.month:02d}"
+    reach = con.sql(
+        f"""
+        SELECT count(*) FROM (
+          SELECT h3_cell_to_parent(h3, {UW_RES}) AS cell, min(coll_month) AS first FROM cells GROUP BY 1
+        ) WHERE first > '{since}'
+        """
+    ).fetchone()
+    days, never = int(row[2]), int(row[3])
+    return {
+        "underway_hours": int(row[0] or 0),
+        "stationary_hours": int(row[1] or 0),
+        "platform_days_logged": days,
+        "platform_days_never_underway": never,
+        "share_never_underway": round(never / days, 4) if days else None,
+        "reach_cells_12m": int(reach[0]) if reach else 0,
+    }
+
+
+def reach_series(con: duckdb.DuckDBPyConnection) -> dict[str, Any]:
+    """Per collection month: underway hours, and r8 cells first covered that month (Reach)."""
+    rows = con.sql(
+        f"""
+        WITH first AS (
+          SELECT min(coll_month) AS month FROM cells GROUP BY h3_cell_to_parent(h3, {UW_RES})
+        ), new AS (SELECT month, count(*) AS new_cells FROM first GROUP BY 1),
+        hours AS (SELECT left(day, 7) AS month, round(sum(min_underway) / 60.0, 1) AS h FROM uw GROUP BY 1)
+        SELECT month, coalesce(h, 0), coalesce(new_cells, 0)::BIGINT
+        FROM new FULL JOIN hours USING (month) ORDER BY month
+        """
+    ).fetchall()
+    return {"columns": ["month", "underway_h", "new_cells_r8"], "rows": [list(r) for r in rows]}
+
+
 def build(
     con: duckdb.DuckDBPyConnection,
     state: State,
@@ -423,6 +532,7 @@ def build(
     out.mkdir(parents=True)
     load_cells(con, state)
     load_vdays(con, state)
+    load_underway(con, state)
     idx, months = _p(state.require("file_index")), _p(state.require("file_months"))
 
     manifest: dict[str, Any] = {
@@ -442,7 +552,7 @@ def build(
         manifest["windows"][name] = [
             t
             for res in levels
-            for t in _write_level(con, _vessel_sql(res, where), res, out / base / f"r{res}", base)
+            for t in _write_level(con, _window_sql(res, where), res, out / base / f"r{res}", base)
         ]
     load_last24h(con, state, now)
     base = "layers/recent/24h"
@@ -495,6 +605,7 @@ def build(
         "vessel_days": vessels[0],
         "platforms_active_30d": vessels[1],
         "provider_views": providers,
+        **underway_meta(con, today),
         **latency(con, state, now),
     }
     (out / "meta.json").write_text(json.dumps(meta, indent=2))
@@ -511,6 +622,7 @@ def build(
         "columns": cols,
         "community": [list(r) for r in con.sql(series_sql.format(group="")).fetchall()],
     }
+    series["reach"] = reach_series(con)
     if providers:
         by: dict[str, list[list[Any]]] = {}
         for row in con.sql(series_sql.format(group="i.provider,")).fetchall():

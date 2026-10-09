@@ -13,6 +13,13 @@ export interface Meta {
   platforms: number;
   vessel_days?: number;
   platforms_active_30d?: number;
+  /** Underway time (layers.underway_meta): hours by speed class, and platform-days that never got underway. */
+  underway_hours?: number;
+  stationary_hours?: number;
+  platform_days_logged?: number;
+  platform_days_never_underway?: number;
+  share_never_underway?: number | null;
+  reach_cells_12m?: number;
   provider_views: boolean;
   /** Latency behind NCEI (layers.latency): S3 publication of the last batch taken in, and minutes to the census. */
   last_batch_published?: string | null;

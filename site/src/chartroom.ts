@@ -83,6 +83,25 @@ export function renderLadder(title: string, steps: [RGBA, string][], extra?: { t
   $("ladder").innerHTML = `<span class="ladder-title">${title}</span><div class="ladder-steps">${rows(steps)}</div>${more}`;
 }
 
+/* ---------- Traffic measure: underway hours (default) or vessel-days, switched from the legend ---------- */
+
+export type Measure = "underway" | "vessels";
+
+/** The legend's measure switch, as a second legend block (the legend is redrawn on every change). */
+export function measureSwitch(current: Measure): { title: string; steps: [RGBA, string][] } {
+  const button = (m: Measure, label: string) =>
+    `<button type="button" class="ladder-toggle" data-measure="${m}" aria-pressed="${current === m}">${label}</button>`;
+  return { title: `Measure<br />${button("underway", "Underway")}<br />${button("vessels", "Vessel-days")}`, steps: [] };
+}
+
+/** Calls `onChange` when the legend's measure switch is used; wire once per page. */
+export function wireMeasureSwitch(onChange: (m: Measure) => void): void {
+  $("ladder").addEventListener("click", (e) => {
+    const m = (e.target as HTMLElement).closest<HTMLElement>("[data-measure]")?.dataset.measure;
+    if (m === "underway" || m === "vessels") onChange(m);
+  });
+}
+
 /* ---------- Masthead reflection: the wordmark's water lines, drawn from data (newest first) ---------- */
 
 export function renderReflection(values: number[], label: string): void {

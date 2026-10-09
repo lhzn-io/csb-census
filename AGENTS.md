@@ -25,11 +25,12 @@ It is the community-measurement companion to `lhzn-io/csb-trusted-node`.
 | `src/csb_census/inventory.py` | Anonymous S3 listing and download over keep-alive connections, with retries; `S3Source` / `LocalSource` |
 | `src/csb_census/pipeline.py` | `read_keyed`, `stage` (pass 1), `rank` (pass 2), `finalize`. The identity SQL is defined only here |
 | `src/csb_census/state.py` | Versioned state (Parquet tables plus manifest), mirrored to the `state` release with a generation check |
-| `src/csb_census/incremental.py` | `seed`, `run` (6-hourly), `reconcile` (daily), `AsOfSource` for replays |
+| `src/csb_census/incremental.py` | `seed`, `run` (6-hourly), `reconcile` (daily), `seed_underway`, `AsOfSource` for replays |
+| `src/csb_census/underway.py` | Tracks and underway time: 1-minute centroids per (file, platform), classed by speed (`BANDS`), rolled up per (platform, day, r8). The only home of that SQL |
 | `src/csb_census/layers.py` | Published dashboard data: H3 layers (with vessel-days), recent-window layers (collection windows, plus the last 24 hours of publication at r9), manifest, `meta.json`, `timeseries_month.json`, `recent.json` |
 | `src/csb_census/spilhaus.py` | The landing map: the r4 layer projected into the world-ocean square for each center (`CENTERS`), via pyproj's `spilhaus` |
 | `src/csb_census/lis.py` | Regional analysis (Long Island Sound): r9 layer and summary; `extract` of originals at r10 on garnet |
-| `src/csb_census/cli.py` | `backfill`, `rank`, `seed`, `incremental`, `reconcile`, `replay`, `state pull/push`, `layers`, `lis extract` |
+| `src/csb_census/cli.py` | `backfill`, `rank`, `seed`, `incremental`, `reconcile`, `replay`, `underway seed`, `state pull/push`, `layers`, `lis extract` |
 | `site/` | Dashboard (Vite + TypeScript, MapLibre 5, deck.gl 9, hyparquet), "chart room" design in the Long Horizon brand. Four pages: `index.html` (landing on the world-ocean square, `src/landing.ts`), `archive.html` (`src/archive.ts`), `recent.html` (`src/recent.ts`) and `about.html` (`src/about.ts`: what the census is plus `docs/src/glossary.md`, rendered at build time; the same content is the About drawer on every page). Shared pieces: `src/chartroom.ts` and `src/chartroom.css` (frame, ticks, band, logbook), `src/mapview.ts` (map, OpenFreeMap basemaps). Data in `site/public/data` (gitignored); land masks in `site/public/spilhaus` (committed) |
 | `scripts/land_masks.py` | Rebuilds the landing page's land masks from Natural Earth 1:50m land (only if the centers change) |
 | `scripts/deploy-pages.sh`, `scripts/deploy-watch.sh` | Preview deploys to Cloudflare Pages from garnet: build plus data, and a watcher that deploys after each dry-run layers build |

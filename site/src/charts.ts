@@ -5,6 +5,8 @@ export interface Series {
   columns: string[];
   community: [string, number, number, number, number][];
   providers?: Record<string, [string, number, number, number, number][]>;
+  /** Per collection month: underway hours and r8 cells first covered that month. */
+  reach?: { columns: string[]; rows: [string, number, number][] };
 }
 
 export async function loadSeries(): Promise<Series> {

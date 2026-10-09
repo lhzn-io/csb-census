@@ -199,6 +199,30 @@ def reconcile(state_dir: Path, repo: str | None, memory_limit: str, threads: int
         state_mod.push(state, repo)
 
 
+@cli.group(name="underway")
+def underway_group() -> None:
+    """Underway time: how long vessels log while moving, and while stationary."""
+
+
+@underway_group.command(name="seed")
+@click.option("--state", "state_dir", type=click.Path(path_type=Path), required=True)
+@click.option(
+    "--minutes",
+    type=click.Path(path_type=Path),
+    required=True,
+    help="Cache of minute rows; files it lacks are downloaded and classified into it.",
+)
+@click.option("--chunk-files", default=15_000, show_default=True)
+@engine_options
+def underway_seed(state_dir: Path, minutes: Path, chunk_files: int, memory_limit: str, threads: int) -> None:
+    """Rebuild the underway base for every live file (resumable), as a new state generation."""
+    state = State(state_dir)
+    work = state_dir.parent / f"{state_dir.name}-work"
+    con = _connect({"memory_limit": memory_limit, "threads": threads}, work)
+    result = incremental.seed_underway(con, state, minutes, S3Source(), work=work, chunk_files=chunk_files)
+    click.echo(json.dumps(asdict(result)))
+
+
 @cli.command()
 @click.option("--backfill", "backfill_dir", type=click.Path(path_type=Path), required=True)
 @click.option("--state", "state_dir", type=click.Path(path_type=Path), required=True, help="Fresh directory.")

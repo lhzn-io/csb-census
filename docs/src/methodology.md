@@ -54,6 +54,35 @@ harbor. To show where the crowd is, the census also counts **vessel-days**.
 - At coarser map levels, a cell's vessel-days are its distinct (platform, day)
   pairs, so a boat crossing a large cell in a day counts once.
 
+## Tracks and underway time
+
+Loggers often keep recording at the dock or at anchor. Across the whole archive
+(measured 2026-10-08), about 58% of logged minutes are stationary but carry only
+about 18% of the soundings, and about one platform-day in five never gets
+underway. The census therefore measures traffic as **underway time**.
+
+- Each (file, `UNIQUE_ID`) group is a track. Its soundings are averaged into one
+  centroid per minute; single GPS fixes jitter too much for point-to-point
+  speeds. Soundings repeated within a file count once.
+- A minute's speed is the distance from the previous minute's centroid over the
+  time between them, or to the next minute for the first minute of a segment.
+  Minutes more than 5 minutes apart start a new segment.
+- Classes: **underway** at 2 knots or more, **slow** from 0.5 to 2 knots,
+  **stationary** under 0.5 knots. Over 60 knots is a position glitch, and a
+  minute with no neighbor within 5 minutes is isolated; both are logged but
+  neither is underway.
+- Only groups holding at least one unique sounding count, so a whole-file resend
+  adds no time. Partial overlaps between files are not removed.
+- Minutes are kept per (provider, platform, collection day, H3 resolution 8 cell
+  of the minute's centroid). The history was classified once from the full
+  archive (`csb-census underway seed`); each incremental update classifies its
+  new files, and reconcile subtracts the minutes of files removed since.
+
+**Reach** is new ground: resolution 8 cells whose earliest sounding falls in a
+given collection month. Divided by that month's underway hours, it gives new
+cells per hour underway. Collection months fill in as late data arrives, so
+recent months rise over time.
+
 ## Two clocks
 
 The census uses two clocks and always says which (short definitions of every
@@ -134,12 +163,12 @@ The dashboard reads static files, so anyone can download and re-check them:
 
 | File | Content |
 | :--- | :--- |
-| `meta.json` | Totals: published, unique, resend, cross-platform, files, provider labels, platform IDs, vessel-days, platforms active in the last 30 days, the last ingest time, when the data was built, and the census latency (latest and 30-day median) |
-| `timeseries_month.json` | The same counts per collection month |
+| `meta.json` | Totals: published, unique, resend, cross-platform, files, provider labels, platform IDs, vessel-days, platforms active in the last 30 days, hours underway and stationary, platform-days never underway, cells first covered in the last 12 months, the last ingest time, when the data was built, and the census latency (latest and 30-day median) |
+| `timeseries_month.json` | The same counts per collection month, and Reach: underway hours and resolution 8 cells first covered, per collection month |
 | `recent.json` | Recent activity by publication time (last 24 hours, 7 and 30 days, and all time: files, soundings, platforms, new platforms, median lag), 6-hourly batches for 30 days, daily series by publication and by collection day for 400 days, the lag distribution, the census's own recent runs, and the last 24 hours' soundings by age at publication (under a week, a month, a year, older, no date) |
-| `layers/r4`, `r6`, `r8` | All-time H3 cells at resolutions 4, 6 and 8 (finer levels split by parent cell), each with unique and published soundings, duplicate share, provider count, the first and last collection year, vessel-days and platforms |
-| `layers/recent/7d`, `30d`, `365d` | Vessel-days and platforms per cell for soundings collected in the last 7, 30 or 365 days (the 365-day window stops at resolution 6) |
-| `layers/recent/24h` | What NCEI published in the last 24 hours (by file stamp), at H3 resolutions 4 to 9: unique and published soundings and platforms per cell, the first and last collection day, and the soundings-weighted mean age at publication in days |
+| `layers/r4`, `r6`, `r8` | All-time H3 cells at resolutions 4, 6 and 8 (finer levels split by parent cell), each with unique and published soundings, duplicate share, provider count, the first and last collection year, the first collection month, vessel-days, platforms, and hours underway and stationary |
+| `layers/recent/7d`, `30d`, `365d` | Vessel-days, platforms and hours underway and stationary per cell for soundings collected in the last 7, 30 or 365 days (the 365-day window stops at resolution 6) |
+| `layers/recent/24h` | What NCEI published in the last 24 hours (by file stamp), at H3 resolutions 4 to 9: unique and published soundings and platforms per cell, the first and last collection day, the soundings-weighted mean age at publication in days, and hours underway |
 | `layers/manifest.json` | Every layer file with its bounding box |
 | `spilhaus/<center>/cells.json` | The resolution 4 layer projected into the world-ocean square of the landing page: Athelstan Spilhaus's aspect of Adams' world in a square (`classic`), and the same projection centered on the Americas, the Atlantic and the Pacific. Static land masks for each center (Natural Earth 1:50m) ship with the site |
 | `lis/` | Long Island Sound at resolution 9: cells and a yearly coverage summary |

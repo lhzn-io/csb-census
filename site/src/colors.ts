@@ -66,6 +66,41 @@ export function freshColor(n: number, maxExp: number, ageDays: number | null | u
   return [r, g, b, fade ? ageAlpha(ageDays) : 235];
 }
 
+/**
+ * Underway time per cell, on the soundings ramp: log-scaled minutes, 1 minute to 10^maxExp across the
+ * ramp, with sparse cells fading into the basemap like the soundings map.
+ */
+export function underwayColor(hours: number, maxExp: number): RGBA {
+  const t = Math.min(1, Math.log10(Math.max(1, hours * 60)) / maxExp);
+  return ramp(COUNTS, t, Math.round(45 + 190 * t));
+}
+
+/** A duration in minutes as a legend label: "10 min", "17 h", "7 d". */
+export function duration(minutes: number): string {
+  if (minutes < 60) return `${Math.round(minutes)} min`;
+  const h = minutes / 60;
+  return h < 48 ? `${h < 10 ? h.toFixed(1).replace(/\.0$/, "") : Math.round(h)} h` : `${Math.round(h / 24)} d`;
+}
+
+/** Reach: the year a cell was first covered, older to newer (newest ground brightest). */
+export function reachBins(now = new Date()): { from: number; label: string }[] {
+  const bins = [
+    { from: -Infinity, label: "before 2016" },
+    { from: 2016, label: "2016-19" },
+    { from: 2020, label: "2020-23" },
+  ];
+  for (let y = 2024; y <= now.getUTCFullYear(); y++) bins.push({ from: y, label: String(y) });
+  return bins;
+}
+
+export function reachColor(firstMonth: string | null | undefined, bins = reachBins()): RGBA {
+  const year = Number((firstMonth ?? "").slice(0, 4)) || -Infinity;
+  let i = 0;
+  while (i + 1 < bins.length && year >= bins[i + 1].from) i++;
+  const t = i / (bins.length - 1);
+  return ramp(COUNTS, t, Math.round(70 + 170 * t));
+}
+
 export function dupColor(share: number): RGBA {
   return ramp(DUP, share, 210);
 }

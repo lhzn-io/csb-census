@@ -1,6 +1,6 @@
 /** Recent activity: what NCEI published lately, and where boats have been. */
-import { $, frameChart, renderUpdated, renderColumns, renderHorizon, renderLadder, renderReadouts, renderReflection, setFavicon, table, wireAbout, wireLogbook, YELLOW } from "./chartroom";
-import { AGE_STEPS, RECENT_BINS, binColor, freshColor, type RGBA } from "./colors";
+import { $, frameChart, measureSwitch, renderUpdated, renderColumns, renderHorizon, renderLadder, renderReadouts, renderReflection, setFavicon, table, wireAbout, wireLogbook, wireMeasureSwitch, YELLOW, type Measure } from "./chartroom";
+import { AGE_STEPS, RECENT_BINS, binColor, duration, freshColor, underwayColor, type RGBA } from "./colors";
 import { wireBookmarks } from "./bookmarks";
 import { createMapView, whenLoaded } from "./mapview";
 import { compact, loadMeta } from "./metrics";
@@ -17,10 +17,13 @@ const WINDOW_TEXT: Record<MapWindow, string> = {
 };
 /** One soundings scale for every level of the 24h map, so the legend holds at any zoom. */
 const MAX_EXP_24H = 5;
+/** Underway minutes per cell in a collection window, log-scaled per resolution. */
+const UW_EXP: Record<number, number> = { 4: 3.5, 6: 2.75, 8: 2 };
 
 const state = {
   window: "24h" as MapWindow,
   fade: true,
+  measure: "underway" as Measure,
   manifest: null as LayerManifest | null,
   recent: null as Recent | null,
 };
@@ -35,17 +38,22 @@ const view = createMapView({
   basemap: "dark",
   storageKey: "csb-census:basemap:recent",
   pool: () => state.manifest?.windows?.[state.window] ?? [],
-  color: (d) =>
-    state.window === "24h" ? freshColor(d.n_unique, MAX_EXP_24H, d.mean_age_d, state.fade) : binColor(d.vessel_days ?? 0, RECENT_BINS),
-  colorKey: () => `${state.window}:${state.fade}`,
+  color: (d, res) =>
+    state.window === "24h"
+      ? freshColor(d.n_unique, MAX_EXP_24H, d.mean_age_d, state.fade)
+      : state.measure === "underway"
+        ? underwayColor(d.underway_h ?? 0, UW_EXP[res] ?? 2)
+        : binColor(d.vessel_days ?? 0, RECENT_BINS),
+  colorKey: () => `${state.window}:${state.fade}:${state.measure}`,
   tooltip: (c: Cell) =>
     (state.window === "24h"
       ? [
           `${compact(c.n_unique)} unique of ${compact(c.n_published)} soundings, ${WINDOW_TEXT["24h"]}`,
-          `${c.platforms} platform${c.platforms === 1 ? "" : "s"}`,
+          `${c.platforms} platform${c.platforms === 1 ? "" : "s"}, ${duration((c.underway_h ?? 0) * 60)} underway`,
           collectedText(c),
         ]
       : [
+          `${duration((c.underway_h ?? 0) * 60)} underway, ${duration((c.stationary_h ?? 0) * 60)} stationary`,
           `${c.vessel_days} vessel-day${c.vessel_days === 1 ? "" : "s"}, ${WINDOW_TEXT[state.window]}`,
           `${c.platforms} platform${c.platforms === 1 ? "" : "s"}`,
           `${compact(c.n_unique)} unique of ${compact(c.n_published)} soundings`,
@@ -83,10 +91,21 @@ function ladder(): void {
     renderLadder(`Unique soundings per cell · ${WINDOW_TEXT["24h"]}`, steps, fadeKey());
     return;
   }
+  if (state.measure === "underway") {
+    const top = UW_EXP[6];
+    const ks = [0, 1, 2, top];
+    renderLadder(
+      `Underway time per cell · ${WINDOW_TEXT[state.window]}`,
+      ks.map((k) => [underwayColor(10 ** k / 60, top), k === top ? `${duration(10 ** k)}+` : duration(10 ** k)]),
+      measureSwitch(state.measure),
+    );
+    return;
+  }
   const e = RECENT_BINS.edges;
   renderLadder(
     `Vessel-days per cell · ${WINDOW_TEXT[state.window]}`,
     e.map((edge, i) => [binColor(edge, RECENT_BINS), i === e.length - 1 ? `${edge}+` : String(edge)]),
+    measureSwitch(state.measure),
   );
 }
 
@@ -172,6 +191,11 @@ async function main(): Promise<void> {
       void view.refresh();
     });
   }
+  wireMeasureSwitch((m) => {
+    state.measure = m;
+    ladder();
+    void view.refresh();
+  });
   // The fade switch lives in the legend, which is redrawn on every change, so listen on the legend itself.
   $("ladder").addEventListener("click", (e) => {
     if (!(e.target instanceof HTMLElement) || e.target.id !== "fade-toggle") return;

@@ -2,7 +2,7 @@
 # Deploy the site to Cloudflare Pages after each P3 layers rebuild ("STEP layers" in ~/data/csb-p3.log).
 # Runs alongside the P3 loop and stops when its tmux session ends.
 LOG=~/data/csb-p3.log
-count() { grep -c "^STEP layers" "$LOG" 2>/dev/null || echo 0; }
+count() { local n; n=$(grep -c "^STEP layers" "$LOG" 2>/dev/null); echo "${n:-0}"; }
 last=$(count)
 echo "WATCH start $(date -u +%FT%TZ), layers builds so far: $last"
 while tmux has-session -t csb-p3 2>/dev/null; do

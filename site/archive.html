@@ -37,7 +37,8 @@
           <span class="tabgroup-label">Map</span>
           <div class="tabgroup-row">
             <label class="tab"><input type="radio" name="metric" value="unique" checked />Soundings</label>
-            <label class="tab"><input type="radio" name="metric" value="vessels" />Vessel-days</label>
+            <label class="tab"><input type="radio" name="metric" value="traffic" />Traffic</label>
+            <label class="tab"><input type="radio" name="metric" value="reach" />Reach</label>
             <label class="tab"><input type="radio" name="metric" value="dup" />Duplicates</label>
           </div>
         </div>
@@ -92,6 +93,11 @@
       <section>
         <h3>The archive</h3>
         <div id="totals"></div>
+      </section>
+      <section>
+        <h3>Reach: new ground by year</h3>
+        <div id="reach"></div>
+        <p class="note">H3 cells (about 0.7 km²) covered for the first time, by collection year, and per hour underway.</p>
       </section>
       <section id="lis-section" hidden>
         <h3>Long Island Sound</h3>
