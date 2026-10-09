@@ -1,9 +1,11 @@
-/** Landing page: the whole archive on the world-ocean square, with the ways in. */
+/** Landing page: the whole archive on a globe or the world-ocean square, with the ways in. */
 import { $, renderLadder, renderReflection, renderUpdated, setFavicon, wireAbout } from "./chartroom";
 import { ARCHIVE_BINS, binColor, uniqueColor, type RGBA } from "./colors";
 import { DATA } from "./config";
 import { compact, loadMeta } from "./metrics";
 import { hours, loadRecent } from "./recentdata";
+import { cellsFor, loadManifest, type Cell } from "./tiles";
+import type { Globe } from "./globe";
 
 interface Land {
   size: number;
@@ -22,6 +24,7 @@ interface Cells {
   last_year: number[];
 }
 type Metric = "unique" | "vessels";
+type View = "globe" | "square";
 
 const state = {
   metric: "unique" as Metric,
@@ -30,6 +33,8 @@ const state = {
   cells: null as Cells | null,
   nearest: null as ((u: number, v: number, maxDist: number) => number) | null,
   hover: -1,
+  view: "globe" as View,
+  globe: null as Globe | null,
 };
 /** Where each view is centered; only the classic one keeps every edge of the square on land. */
 const CENTERS: Record<string, string> = {
@@ -39,6 +44,14 @@ const CENTERS: Record<string, string> = {
   pacific: "centered 15°N 165°W",
 };
 const CENTER_KEY = "csb-census:center";
+const VIEW_KEY = "csb-census:view";
+/** Where the globe faces for each center, as [lon, lat]; the classic one faces the southern Indian Ocean. */
+const FACING: Record<string, [number, number]> = {
+  spilhaus: [75, -25],
+  americas: [-75, 15],
+  atlantic: [-45, 40],
+  pacific: [-165, 15],
+};
 const SPILHAUS = "https://en.wikipedia.org/wiki/Athelstan_Spilhaus";
 const SPILHAUS_MAP = "https://storymaps.arcgis.com/stories/756bcae18d304a1eac140f19f4d5cb3d";
 
@@ -90,6 +103,11 @@ function landCanvas(land: Land): HTMLCanvasElement {
   return c;
 }
 
+/** A globe cell's color, on the same scales as the square's dots. */
+function cellColor(c: Cell): RGBA {
+  return state.metric === "unique" ? uniqueColor(c.n_unique, MAX_EXP) : binColor(c.vessel_days ?? 0, ARCHIVE_BINS);
+}
+
 function color(i: number): RGBA {
   const c = state.cells!;
   return state.metric === "unique" ? uniqueColor(c.unique[i], MAX_EXP) : binColor(c.vessel_days[i], ARCHIVE_BINS);
@@ -113,10 +131,21 @@ function fadeEdges(ctx: CanvasRenderingContext2D, side: number): void {
   }
 }
 
-function draw(): void {
-  const canvas = $("sp-canvas") as HTMLCanvasElement;
+/** The chart's side: the largest square that fits, leaving room for the caption. */
+function chartSide(): number {
   const box = $("sp-chart").getBoundingClientRect();
-  const side = Math.floor(Math.min(box.width, box.height - 26));
+  return Math.floor(Math.min(box.width, box.height - 26));
+}
+
+function draw(): void {
+  const side = chartSide();
+  if (state.view === "globe") {
+    const g = $("sp-globe");
+    g.style.width = g.style.height = `${side}px`;
+    state.globe?.map.resize();
+    return;
+  }
+  const canvas = $("sp-canvas") as HTMLCanvasElement;
   const dpr = window.devicePixelRatio || 1;
   canvas.style.width = canvas.style.height = `${side}px`;
   canvas.width = canvas.height = Math.round(side * dpr);
@@ -256,19 +285,63 @@ async function useCenter(name: string): Promise<void> {
   state.cells = cells;
   state.nearest = indexCells(cells);
   state.hover = -1;
-  $("sp-caption-text").innerHTML = [
-    `After <a href="${SPILHAUS}">Athelstan Spilhaus</a>'s <a href="${SPILHAUS_MAP}">world ocean map</a>`,
-    CENTERS[name],
-    `<a href="https://h3geo.org/">H3</a> resolution 4`,
-  ]
-    .filter(Boolean)
-    .join(" · ");
+  caption();
   try {
     localStorage.setItem(CENTER_KEY, name);
   } catch {
     // storage unavailable: the choice lasts for this visit
   }
   draw();
+}
+
+function caption(): void {
+  $("sp-caption-text").innerHTML = (
+    state.view === "globe"
+      ? ["Drag to turn the globe, click to open the chart", `<a href="https://h3geo.org/">H3</a> resolution 4`]
+      : [
+          `After <a href="${SPILHAUS}">Athelstan Spilhaus</a>'s <a href="${SPILHAUS_MAP}">world ocean map</a>`,
+          CENTERS[state.center],
+          `<a href="https://h3geo.org/">H3</a> resolution 4`,
+        ]
+  )
+    .filter(Boolean)
+    .join(" · ");
+}
+
+/** The globe tooltip: the same lines as the square's. */
+function globeTip(c: Cell, touch: boolean): string {
+  const years = c.first_year === c.last_year ? `${c.first_year}` : `${c.first_year}-${c.last_year}`;
+  return `${compact(c.n_unique)} unique of ${compact(c.n_published)}
+    <br>${compact(c.vessel_days ?? 0)} vessel-days, ${c.platforms} platforms<br>collected ${years}
+    <br><i>${touch ? "tap again" : "click"} to open the chart</i>`;
+}
+
+/** Switch between the globe and the ocean square; the globe and its cells load on first use. */
+async function useView(view: View): Promise<void> {
+  state.view = view;
+  $("sp-canvas").hidden = view === "globe";
+  $("sp-globe").hidden = view !== "globe";
+  $("sp-tip").hidden = true;
+  try {
+    localStorage.setItem(VIEW_KEY, view);
+  } catch {
+    // storage unavailable: the choice lasts for this visit
+  }
+  caption();
+  draw();
+  if (view === "globe" && !state.globe) {
+    const [{ createGlobe }, manifest] = await Promise.all([import("./globe"), loadManifest()]);
+    const cells = await cellsFor(manifest.tiles.filter((tile) => tile.res === 4));
+    state.globe = createGlobe({
+      container: "sp-globe",
+      cells,
+      center: FACING[state.center] ?? FACING.spilhaus,
+      color: cellColor,
+      tooltip: globeTip,
+      tip: $("sp-tip"),
+    });
+    draw();
+  }
 }
 
 function wireDrawer(): void {
@@ -293,11 +366,25 @@ async function main(): Promise<void> {
   } catch {
     // storage unavailable: the time-zone default stands
   }
-  const [meta, recent] = await Promise.all([loadMeta(), loadRecent(), useCenter(initial)]);
+  let view: View = "globe";
+  try {
+    if (localStorage.getItem(VIEW_KEY) === "square") view = "square";
+  } catch {
+    // storage unavailable: the globe is the default
+  }
+  state.center = initial;
+  const [meta, recent] = await Promise.all([loadMeta(), loadRecent(), useCenter(initial), useView(view)]);
   wirePointer();
+  for (const input of document.querySelectorAll<HTMLInputElement>('input[name="view"]')) {
+    input.checked = input.value === view;
+    input.addEventListener("change", () => void useView(input.value as View));
+  }
   for (const input of document.querySelectorAll<HTMLInputElement>('input[name="center"]')) {
     input.checked = input.value === initial;
-    input.addEventListener("change", () => void useCenter(input.value));
+    input.addEventListener("change", () => {
+      void useCenter(input.value);
+      state.globe?.face(FACING[input.value] ?? FACING.spilhaus);
+    });
   }
   renderUpdated(meta);
   new ResizeObserver(() => draw()).observe($("sp-chart"));
@@ -323,6 +410,7 @@ async function main(): Promise<void> {
       state.metric = input.value as Metric;
       ladder();
       draw();
+      state.globe?.recolor(cellColor);
     });
   }
 }

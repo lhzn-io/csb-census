@@ -86,17 +86,23 @@
 
       <figure class="sp-chart" id="sp-chart">
         <canvas id="sp-canvas" role="img" aria-label="Every cell of the archive on a map of the world ocean"></canvas>
+        <div class="sp-globe" id="sp-globe" role="img" aria-label="Every cell of the archive on a globe; drag to turn it" hidden></div>
         <figcaption class="sp-caption">
           <span id="sp-caption-text"></span>
         </figcaption>
         <div class="sp-tip" id="sp-tip" hidden></div>
-        <button class="center-tab" id="center-tab" type="button" aria-expanded="false" aria-controls="center-drawer">Center</button>
+        <button class="center-tab" id="center-tab" type="button" aria-expanded="false" aria-controls="center-drawer">View</button>
       </figure>
     </main>
 
     <aside class="center-drawer" id="center-drawer" hidden>
+      <h2>View</h2>
+      <div class="center-options view-options" role="radiogroup" aria-label="View">
+        <label><input type="radio" name="view" value="globe" checked /><b>Globe</b><span>drag to turn it</span></label>
+        <label><input type="radio" name="view" value="square" /><b>Ocean square</b><span>the world ocean as one body</span></label>
+      </div>
       <h2>Center</h2>
-      <p class="note">The whole world ocean in one square. Choose where the square is centered.</p>
+      <p class="note">Where the globe faces, or where the square is centered.</p>
       <div class="center-options" role="radiogroup" aria-label="Center of the map">
         <label><input type="radio" name="center" value="spilhaus" checked /><b>Classic</b><span>southern Indian Ocean</span></label>
         <label><input type="radio" name="center" value="americas" /><b>Americas</b><span>15°N 75°W</span></label>

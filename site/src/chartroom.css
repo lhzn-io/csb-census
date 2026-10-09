@@ -274,6 +274,9 @@ body.landing-sp .mast { min-height: var(--mast); }
 .sp-chart { position: relative; margin: 0; min-height: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
 
 .sp-chart canvas { display: block; }
+/* The globe: a square like the ocean square; MapLibre draws the sphere, the space around it stays the page. */
+.sp-globe { position: relative; flex: none; background: transparent; }
+.sp-globe .maplibregl-canvas { outline: none; }
 .sp-caption { margin-top: 10px; font-family: var(--mono); font-size: 9px; color: #6f7c86; letter-spacing: 0.04em; text-align: center; }
 
 /* Center drawer: a quiet tab on the left edge, mirroring the logbook on the other pages. */
@@ -290,6 +293,7 @@ body.landing-sp .mast { min-height: var(--mast); }
 }
 .center-drawer h2 { margin: 0 0 10px; font-weight: 300; font-size: 24px; letter-spacing: 0.3em; text-transform: uppercase; color: var(--yellow); }
 .center-options { display: grid; gap: 4px; margin: 14px 0; }
+.center-drawer .view-options + h2 { margin-top: 22px; }
 .center-options label {
   display: grid; grid-template-columns: 1fr auto; align-items: baseline; gap: 10px; cursor: pointer;
   padding: 9px 12px 11px; border: 1px solid transparent; border-top: 0; border-radius: 0 0 18px 18px;
