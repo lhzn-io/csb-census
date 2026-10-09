@@ -5,7 +5,7 @@ import { AttributionControl, Map as MapLibreMap, NavigationControl, setWorkerUrl
 import "maplibre-gl/dist/maplibre-gl.css";
 import workerUrl from "maplibre-gl/dist/maplibre-gl-csp-worker.js?url";
 
-import { applyBasemap, dataBefore, isBasemap, setBasemap, styleUrl, type Basemap } from "./basemap";
+import { applyBasemap, dataBefore, isBasemap, setBasemap, type Basemap } from "./basemap";
 import type { RGBA } from "./colors";
 import { RES_FOR_ZOOM } from "./config";
 import { cellsFor, visibleTiles, type Cell, type Tile } from "./tiles";
@@ -37,8 +37,8 @@ export interface MapView {
 setWorkerUrl(workerUrl);
 
 const OPACITY_KEY = "csb-census:opacity";
-/** Data opacity on the relief basemap until the viewer picks their own, so the seafloor shows through. */
-const RELIEF_OPACITY = 0.6;
+/** Data opacity until the viewer picks their own, so the seafloor relief shows through. */
+const DEFAULT_OPACITY = 0.6;
 
 function savedOpacity(): number | null {
   try {
@@ -86,20 +86,19 @@ export function createMapView(opts: MapViewOptions): MapView {
   const initial = savedBasemap(opts.storageKey, opts.basemap);
   const map = new MapLibreMap({
     container: opts.container,
-    style: styleUrl(initial),
+    // No style here: applyBasemap sets it just below, adding the relief (the constructor cannot transform one).
     center: opts.center ?? [-40, 30],
     zoom: opts.zoom ?? 1.6,
     attributionControl: false,
     hash: true,
   });
-  if (initial === "relief") applyBasemap(map, "relief"); // the constructor cannot transform a style
+  applyBasemap(map, initial);
   if (import.meta.env.DEV) (window as unknown as { csbMap: MapLibreMap }).csbMap = map; // console debugging
   map.addControl(new NavigationControl({ showCompass: false }), "top-right");
-  // Data opacity: the viewer's own choice when they have made one, else see-through on relief.
-  let chosen = savedOpacity();
-  let opacity = chosen ?? (initial === "relief" ? RELIEF_OPACITY : 1);
+  // Data opacity: the viewer's own choice when they have made one, else see-through.
+  let opacity = savedOpacity() ?? DEFAULT_OPACITY;
   const slider = new OpacityControl(opacity, (v) => {
-    opacity = chosen = v;
+    opacity = v;
     try {
       localStorage.setItem(OPACITY_KEY, String(v));
     } catch {
@@ -123,10 +122,6 @@ export function createMapView(opts: MapViewOptions): MapView {
     input.checked = input.value === initial;
     input.addEventListener("change", () => {
       const kind = input.value as Basemap;
-      if (chosen === null) {
-        opacity = kind === "relief" ? RELIEF_OPACITY : 1;
-        slider.input.value = String(opacity);
-      }
       setBasemap(map, kind, () => void refresh());
       try {
         localStorage.setItem(opts.storageKey, kind);

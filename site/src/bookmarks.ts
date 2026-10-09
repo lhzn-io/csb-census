@@ -27,7 +27,7 @@ export const BOOKMARKS: Bookmark[] = [
   {
     id: "hudson-canyon",
     name: "Hudson Canyon",
-    note: "Submarine canyon at the shelf edge, New York Bight (try the Relief chart)",
+    note: "Submarine canyon at the shelf edge, New York Bight",
     bbox: [-73.0, 39.2, -71.6, 40.3],
   },
 ];

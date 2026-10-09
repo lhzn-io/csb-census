@@ -2,13 +2,17 @@ import type { Map as MapLibreMap, StyleSpecification } from "maplibre-gl";
 
 /**
  * OpenFreeMap vector basemaps (OpenStreetMap data, OpenMapTiles schema): open, no API key. Each style
- * brings its own attribution through its tile source. Relief is the dark style with seafloor relief
- * added beneath its coastlines and labels.
+ * brings its own attribution through its tile source. Both carry seafloor relief beneath their
+ * coastlines and labels: darkened toward the slate palette at night, lightened by day.
  */
 const STYLES = {
   dark: "https://tiles.openfreemap.org/styles/dark",
   light: "https://tiles.openfreemap.org/styles/positron",
-  relief: "https://tiles.openfreemap.org/styles/dark",
+} as const;
+
+const RELIEF_PAINT = {
+  dark: { "raster-saturation": -0.45, "raster-brightness-max": 0.5, "raster-contrast": 0.15 },
+  light: { "raster-saturation": -0.7, "raster-brightness-min": 0.42, "raster-contrast": -0.1, "raster-opacity": 0.9 },
 } as const;
 
 export type Basemap = keyof typeof STYLES;
@@ -29,24 +33,19 @@ export function isBasemap(v: unknown): v is Basemap {
 }
 
 export function styleUrl(kind: Basemap): string {
-  document.documentElement.dataset.basemap = kind === "light" ? "light" : "dark";
+  document.documentElement.dataset.basemap = kind;
   return STYLES[kind];
 }
 
-/** The dark style with the relief raster inserted just above its water, darkened toward the slate palette. */
-function withRelief(_previous: StyleSpecification | undefined, next: StyleSpecification): StyleSpecification {
+/** A style with the relief raster inserted just above its water, painted for that style. */
+const withRelief = (kind: Basemap) => (_previous: StyleSpecification | undefined, next: StyleSpecification): StyleSpecification => {
   const layers = [...next.layers];
   const water = layers.findIndex((l) => l.id === "water" || ("source-layer" in l && l["source-layer"] === "water"));
   layers.splice(water + 1, 0, {
     id: "relief",
     type: "raster",
     source: "relief",
-    paint: {
-      "raster-saturation": -0.45,
-      "raster-brightness-max": 0.5,
-      "raster-contrast": 0.15,
-      "raster-fade-duration": 200,
-    },
+    paint: { ...RELIEF_PAINT[kind], "raster-fade-duration": 200 },
   });
   return {
     ...next,
@@ -56,11 +55,11 @@ function withRelief(_previous: StyleSpecification | undefined, next: StyleSpecif
     },
     layers,
   };
-}
+};
 
-/** Load a basemap's style into the map (Relief adds its raster as the style loads). */
+/** Load a basemap's style into the map, adding the relief as the style loads. */
 export function applyBasemap(map: MapLibreMap, kind: Basemap): void {
-  map.setStyle(styleUrl(kind), kind === "relief" ? { transformStyle: withRelief } : undefined);
+  map.setStyle(styleUrl(kind), { transformStyle: withRelief(kind) });
 }
 
 /**
