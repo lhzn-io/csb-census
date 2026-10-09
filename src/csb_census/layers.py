@@ -37,7 +37,8 @@ from csb_census.state import State
 from csb_census.underway import UW_RES
 
 PARENT = {4: None, 6: 1, 8: 2, 9: 3}  # resolution -> parent resolution used to split files
-LEVELS = {r: PARENT[r] for r in (4, 6, 8)}  # the archive levels
+LEVELS = {r: PARENT[r] for r in (4, 6, 8)}  # the archive levels with every measure
+FINE_RES = 9  # the archive's finest level: soundings only (vessel-days and underway time stop at r8)
 PAD_DEG = {4: 0.3, 6: 0.05, 8: 0.01, 9: 0.005}  # about one cell edge, so tile bboxes cover whole hexagons
 WINDOWS = {"7d": (7, (4, 6, 8)), "30d": (30, (4, 6, 8)), "365d": (365, (4, 6))}  # collection-day windows
 LAST24_LEVELS = (4, 6, 8, 9)  # the last 24 hours of publication, down to the r9 cells recent_cells holds
@@ -237,21 +238,26 @@ def last24h(con: duckdb.DuckDBPyConnection) -> dict[str, Any]:
     return {"buckets": names, "collected": [[n, int(counts.get(n, 0))] for n in names]}
 
 
+def _cells_sql(res: int, where: str) -> str:
+    """Soundings per cell at ``res``, from ``cells`` (held at r9): counts, duplicate share, years covered."""
+    return f"""
+        SELECT h3_cell_to_parent(h3, {res}) AS cell,
+               sum(n_unique)::BIGINT AS n_unique, sum(n_rows)::BIGINT AS n_published,
+               round(1 - sum(n_unique) / sum(n_rows), 4) AS dup_share,
+               count(DISTINCT provider)::INTEGER AS n_providers,
+               min(left(coll_month, 4))::INTEGER AS first_year,
+               max(left(coll_month, 4))::INTEGER AS last_year,
+               min(coll_month) AS first_month
+        FROM cells {where} GROUP BY 1
+    """
+
+
 def _archive_sql(res: int, where: str) -> str:
     return f"""
         SELECT c.*, coalesce(v.vessel_days, 0)::INTEGER AS vessel_days,
                coalesce(v.platforms, 0)::INTEGER AS platforms,
                coalesce(u.underway_h, 0) AS underway_h, coalesce(u.stationary_h, 0) AS stationary_h
-        FROM (
-          SELECT h3_cell_to_parent(h3, {res}) AS cell,
-                 sum(n_unique)::BIGINT AS n_unique, sum(n_rows)::BIGINT AS n_published,
-                 round(1 - sum(n_unique) / sum(n_rows), 4) AS dup_share,
-                 count(DISTINCT provider)::INTEGER AS n_providers,
-                 min(left(coll_month, 4))::INTEGER AS first_year,
-                 max(left(coll_month, 4))::INTEGER AS last_year,
-                 min(coll_month) AS first_month
-          FROM cells {where} GROUP BY 1
-        ) c LEFT JOIN ({_vessel_sql(res, where)}) v USING (cell)
+        FROM ({_cells_sql(res, where)}) c LEFT JOIN ({_vessel_sql(res, where)}) v USING (cell)
         LEFT JOIN ({_uw_sql(res, where)}) u USING (cell)
     """
 
@@ -536,7 +542,7 @@ def build(
     idx, months = _p(state.require("file_index")), _p(state.require("file_months"))
 
     manifest: dict[str, Any] = {
-        "levels": {str(r): {"parent": p} for r, p in LEVELS.items()},
+        "levels": {str(r): {"parent": PARENT[r]} for r in (*LEVELS, FINE_RES)},
         "tiles": [],
         "windows": {},
     }
@@ -544,6 +550,12 @@ def build(
         manifest["tiles"] += _write_level(
             con, _archive_sql(res, ""), res, out / "layers" / f"r{res}", "layers"
         )
+    # The finest level lists thousands of tiles: they get an index of their own, which the site
+    # fetches only when someone zooms in that far, so every page load stays light.
+    fine = _write_level(con, _cells_sql(FINE_RES, ""), FINE_RES, out / "layers" / f"r{FINE_RES}", "layers")
+    fine_index = f"layers/manifest_r{FINE_RES}.json"
+    (out / fine_index).write_text(json.dumps({"tiles": fine}, separators=(",", ":")))
+    manifest["fine"] = {"res": FINE_RES, "index": fine_index, "tiles": len(fine)}
     spilhaus.write_cells(con, _p(out / "layers" / "r4" / "*" / "*.parquet"), out)
     today = now.date()
     for name, (days, levels) in WINDOWS.items():

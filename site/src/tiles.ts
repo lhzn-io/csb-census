@@ -35,8 +35,17 @@ export interface Tile {
 
 export interface LayerManifest {
   tiles: Tile[];
+  /** The finest archive level (r9) keeps its tiles in an index of its own, fetched only when needed. */
+  fine?: { res: number; index: string; tiles: number };
   windows?: Record<string, Tile[]>;
   providers?: Record<string, Tile[]>;
+}
+
+/** The tiles of the finest archive level, from its own index. */
+export async function loadFineTiles(index: string): Promise<Tile[]> {
+  const res = await fetch(`${DATA}/${index}`);
+  if (!res.ok) throw new Error(`fine index: HTTP ${res.status}`);
+  return ((await res.json()) as { tiles: Tile[] }).tiles;
 }
 
 export async function loadManifest(): Promise<LayerManifest> {

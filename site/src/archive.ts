@@ -6,7 +6,7 @@ import { loadLis, renderLisSummary } from "./lis";
 import { wireBookmarks } from "./bookmarks";
 import { createMapView, whenLoaded } from "./mapview";
 import { compact, loadMeta, type Meta } from "./metrics";
-import { loadManifest, type Cell, type LayerManifest } from "./tiles";
+import { loadFineTiles, loadManifest, type Cell, type LayerManifest, type Tile } from "./tiles";
 import { column, loadRecent } from "./recentdata";
 
 type Metric = "unique" | "traffic" | "reach" | "dup";
@@ -16,7 +16,22 @@ const state = {
   measure: "underway" as Measure,
   manifest: null as LayerManifest | null,
   lis: null as Cell[] | null,
+  fine: null as Promise<Tile[]> | null,
+  fineTiles: [] as Tile[],
 };
+
+/** Fetch the finest level's index the first time the map is zoomed in far enough to use it. */
+function wantFine(): void {
+  const fine = state.manifest?.fine;
+  if (!fine || state.fine || view.map.getZoom() < 10) return;
+  state.fine = loadFineTiles(fine.index);
+  state.fine
+    .then((tiles) => {
+      state.fineTiles = tiles;
+      void view.refresh();
+    })
+    .catch((err: unknown) => console.error(err));
+}
 
 /** Color scales stretch to the densest cell typical of each resolution (soundings; underway minutes). */
 const MAX_EXP: Record<number, number> = { 4: 8, 6: 7, 8: 6, 9: 5 };
@@ -43,15 +58,26 @@ const view = createMapView({
   container: "map",
   basemap: "dark",
   storageKey: "csb-census:basemap:archive",
-  pool: () => state.manifest?.tiles ?? [],
+  // Traffic stops at r8, where vessel-days and underway time are measured; the other maps reach r9.
+  pool: () => {
+    wantFine();
+    return [...(state.manifest?.tiles ?? []), ...state.fineTiles].filter((t) => state.metric !== "traffic" || t.res <= 8);
+  },
   color,
   colorKey: () => `${state.metric}:${state.measure}`,
   tooltip: (c: Cell) => {
     const years = c.first_year === c.last_year ? `${c.first_year}` : `${c.first_year}-${c.last_year}`;
+    // r9 cells carry soundings only; the traffic lines show where traffic was measured (r8 and coarser).
+    const traffic =
+      c.vessel_days === undefined
+        ? []
+        : [
+            `${duration((c.underway_h ?? 0) * 60)} underway, ${duration((c.stationary_h ?? 0) * 60)} stationary`,
+            `${compact(c.vessel_days)} vessel-days, ${compact(c.platforms ?? 0)} platforms`,
+          ];
     return [
       `${compact(c.n_unique)} unique of ${compact(c.n_published)} published`,
-      `${duration((c.underway_h ?? 0) * 60)} underway, ${duration((c.stationary_h ?? 0) * 60)} stationary`,
-      `${compact(c.vessel_days ?? 0)} vessel-days, ${compact(c.platforms ?? 0)} platforms`,
+      ...traffic,
       `first covered ${c.first_month ?? "?"}, collected ${years}`,
       `duplicate share ${(100 * (c.dup_share ?? 0)).toFixed(1)}%`,
     ].join("\n");

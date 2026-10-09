@@ -40,7 +40,7 @@ def test_every_level_preserves_mapped_totals(
     meta = layers.build(con, state, out)
     want = (meta["mapped_published"], meta["mapped_unique"])
     assert want == (18, 10)  # 8 files, 18 rows; unique: S1-S6, T1-T2, F1-F2
-    for res in layers.LEVELS:
+    for res in (*layers.LEVELS, layers.FINE_RES):  # r9 carries soundings too
         assert totals(con, out / "layers" / f"r{res}" / "*" / "*.parquet") == want
     assert (meta["published"], meta["unique"]) == want
 
@@ -54,7 +54,10 @@ def test_manifest_bboxes_contain_their_cells(
     layers.build(con, state, out)
     manifest = json.loads((out / "layers" / "manifest.json").read_text())
     assert {t["res"] for t in manifest["tiles"]} == {4, 6, 8}
-    for tile in manifest["tiles"]:
+    # r9 has its own index, fetched by the site only when zoomed in that far.
+    fine = json.loads((out / manifest["fine"]["index"]).read_text())["tiles"]
+    assert {t["res"] for t in fine} == {layers.FINE_RES} and manifest["fine"]["tiles"] == len(fine)
+    for tile in [*manifest["tiles"], *fine]:
         w, s, e, n = tile["bbox"]
         for rel in tile["files"]:
             pts = con.sql(
@@ -140,7 +143,7 @@ def test_last_24h_maps_what_was_published(
     layers.build(con, state, out, now=datetime(2026, 9, 3, 12, tzinfo=UTC))
     manifest = json.loads((out / "layers" / "manifest.json").read_text())
     assert {t["res"] for t in manifest["windows"]["24h"]} == set(layers.LAST24_LEVELS)
-    assert set(manifest["levels"]) == {"4", "6", "8"}  # the archive levels are unchanged
+    assert set(manifest["levels"]) == {"4", "6", "8", "9"}
     # Since 2026-09-02 12:00: B (resend of A), F, G (double ingest of F) and H; unique: F1, F2, S6.
     for res in layers.LAST24_LEVELS:
         assert totals(con, out / f"layers/recent/24h/r{res}" / "*" / "*.parquet") == (9, 3)
@@ -212,3 +215,16 @@ def test_provider_views_are_opt_in(
     series = json.loads((out / "timeseries_month.json").read_text())
     by_provider = sum(r[1] for rows in series["providers"].values() for r in rows)
     assert by_provider == sum(r[1] for r in series["community"])
+
+
+def test_fine_level_holds_soundings_only(
+    con: duckdb.DuckDBPyConnection,
+    state: State,
+    tmp_path: Path,
+) -> None:
+    out = tmp_path / "site-data"
+    layers.build(con, state, out)
+    glob = (out / "layers" / f"r{layers.FINE_RES}" / "*" / "*.parquet").as_posix()
+    cols = {c for (c, *_) in con.sql(f"DESCRIBE SELECT * FROM '{glob}'").fetchall()}
+    assert {"h3", "n_unique", "n_published", "dup_share", "first_month"} <= cols
+    assert not cols & {"vessel_days", "underway_h"}  # those are measured at r8 and stop there

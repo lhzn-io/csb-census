@@ -84,7 +84,7 @@ with zoom:
 | 4 | 1,770 km² | World view, and the landing map |
 | 6 | 36 km² | Regional views |
 | 8 | 0.7 km² | Harbors and coasts; the unit of a vessel-day |
-| 9 | 0.1 km² | The closest zoom on the last 24 hours |
+| 9 | 0.1 km² | The closest zoom: soundings, duplicates and Reach on the archive, and the last 24 hours |
 
 ## The two clocks
 
