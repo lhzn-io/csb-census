@@ -24,6 +24,12 @@ export const BOOKMARKS: Bookmark[] = [
     note: "Block Island and its wind farm, Rhode Island",
     bbox: [-71.95, 40.98, -71.3, 41.38],
   },
+  {
+    id: "hudson-canyon",
+    name: "Hudson Canyon",
+    note: "Submarine canyon at the shelf edge, New York Bight (try the Relief chart)",
+    bbox: [-73.0, 39.2, -71.6, 40.3],
+  },
 ];
 
 export function wireBookmarks(map: Map): void {

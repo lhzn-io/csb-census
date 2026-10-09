@@ -77,11 +77,11 @@ a { color: inherit; }
 /* Tabs: quiet hanging tags in the masthead's open top-right. Only the active one carries the brand
    yellow, as a thin line and text, so the controls never compete with the data. */
 .tabs { margin-left: auto; align-self: flex-start; display: flex; gap: 26px; align-items: flex-start; }
-.tabgroup { display: flex; flex-direction: column; gap: 6px; padding-top: 14px; }
+.tabgroup { display: flex; flex-direction: column; gap: 6px; padding-top: 14px; flex: none; }
 /* Fixed group widths, so View sits in the same place on every page whatever the middle group holds. */
 .tabs > .tabgroup:nth-child(1) { width: 168px; }
-.tabs > .tabgroup:nth-child(2) { width: 336px; }
-.tabs > .tabgroup:nth-child(3) { width: 124px; }
+.tabs > .tabgroup:nth-child(2) { width: 360px; }
+.tabs > .tabgroup:nth-child(3) { width: auto; }
 .tabgroup-label { font-size: 8.5px; font-weight: 700; letter-spacing: 0.24em; text-transform: uppercase; color: #6f7c86; }
 .tabgroup-row { display: flex; gap: 2px; }
 .tab {
@@ -418,3 +418,8 @@ body.hz.doc { grid-template-rows: var(--strip) var(--mast) 1fr; }
   .doc-toc { display: none; }
   .doc-article h1 { font-size: 26px; }
 }
+
+/* Data opacity: a small slider under the zoom buttons. */
+.opacity-ctrl { display: flex; align-items: center; gap: 6px; padding: 4px 8px; }
+.opacity-ctrl span { font-size: 8.5px; font-weight: 700; letter-spacing: 0.2em; text-transform: uppercase; color: var(--dim); }
+.opacity-ctrl input { width: 72px; accent-color: var(--yellow); cursor: pointer; }
