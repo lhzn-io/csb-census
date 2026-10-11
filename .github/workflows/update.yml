@@ -1,11 +1,12 @@
 name: Census update
 
 on:
-  # Scheduled runs stay off until launch (after the DCDB/CIRES heads-up and the garnet
-  # validation gate). To launch: uncomment, then push the seed with `csb-census state push --init`.
-  # schedule:
-  #   - cron: "40 0,6,12,18 * * *" # incremental, about 40 min after each NCEI publication batch
-  #   - cron: "15 3 * * *" # daily reconcile against the full bucket listing
+  # The Cloudflare Worker in poller/ starts an incremental run within minutes of each NCEI batch
+  # (workflow_dispatch). The schedule is the fallback: incremental at :55 after each batch hour, and
+  # the daily reconcile against the full bucket listing.
+  schedule:
+    - cron: "55 0,6,12,18 * * *"
+    - cron: "15 3 * * *"
   workflow_dispatch:
     inputs:
       mode:
@@ -16,8 +17,6 @@ on:
 
 permissions:
   contents: write # read and write the `state` release assets
-  pages: write
-  id-token: write
   actions: write # re-enable this workflow so the 60-day inactivity rule never pauses the schedule
 
 concurrency:
@@ -71,21 +70,38 @@ jobs:
           VITE_SHOW_PROVIDERS: ${{ env.SHOW_PROVIDERS }}
         run: npm ci && npm run build
 
-      - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
-      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
+          name: site
           path: site/dist
+          retention-days: 1
 
       - name: Keep the schedule alive
         if: github.event.schedule == '15 3 * * *'
         run: gh api -X PUT "repos/$REPO/actions/workflows/update.yml/enable"
 
+  # A separate job so the Cloudflare token never shares a runner with the npm and Python dependencies
+  # above. Its secrets live in the `cloudflare` environment, which only the main branch may use.
   deploy:
     needs: update
     runs-on: ubuntu-24.04
+    timeout-minutes: 15
     environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+      name: cloudflare
+      url: https://csb.longhorizon.eco
+    permissions:
+      contents: read
     steps:
-      - id: deployment
-        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: site
+          path: dist
+      # Cloudflare Pages project csb-census (csb.longhorizon.eco). The token needs Pages edit only.
+      - name: Deploy to Cloudflare Pages
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          gen=$(jq -r .generation dist/data/meta.json)
+          npx --yes wrangler@4.140.0 pages deploy dist --project-name csb-census --branch main \
+            --commit-hash "$GITHUB_SHA" --commit-message "census generation $gen"

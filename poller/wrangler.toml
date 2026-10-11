@@ -1,0 +1,16 @@
+# Cloudflare Worker that starts the census update within minutes of each NCEI batch (see src/index.ts).
+# Deploy: npx wrangler@4 deploy   Secret: npx wrangler@4 secret put GH_DISPATCH_TOKEN
+name = "csb-census-poller"
+main = "src/index.ts"
+compatibility_date = "2026-10-01"
+workers_dev = false # no public URL: it only runs on its schedule
+
+[triggers]
+crons = ["*/5 * * * *"]
+
+[vars]
+REPO = "lhzn-io/csb-census"
+WORKFLOW = "update.yml"
+
+[observability]
+enabled = true
