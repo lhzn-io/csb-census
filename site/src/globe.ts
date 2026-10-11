@@ -8,6 +8,7 @@ import { AttributionControl, Map as MapLibreMap, setWorkerUrl, type GeoJSONSourc
 import "maplibre-gl/dist/maplibre-gl.css";
 import workerUrl from "maplibre-gl/dist/maplibre-gl-csp-worker.js?url";
 
+import { collapseCredits } from "./basemap";
 import type { RGBA } from "./colors";
 import type { Cell } from "./tiles";
 
@@ -89,6 +90,7 @@ export function createGlobe(opts: {
   });
   if (import.meta.env.DEV) (window as unknown as { csbGlobe: MapLibreMap }).csbGlobe = map; // console debugging
   map.addControl(new AttributionControl({ compact: true })); // the tile source carries its own credits
+  collapseCredits(map);
   const features = opts.cells.map((c, i) => ({
     type: "Feature" as const,
     properties: { i, color: "", alpha: 0 },

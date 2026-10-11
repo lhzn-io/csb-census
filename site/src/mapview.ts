@@ -5,7 +5,7 @@ import { AttributionControl, Map as MapLibreMap, NavigationControl, setWorkerUrl
 import "maplibre-gl/dist/maplibre-gl.css";
 import workerUrl from "maplibre-gl/dist/maplibre-gl-csp-worker.js?url";
 
-import { applyBasemap, dataBefore, isBasemap, setBasemap, type Basemap } from "./basemap";
+import { applyBasemap, collapseCredits, dataBefore, isBasemap, setBasemap, type Basemap } from "./basemap";
 import type { RGBA } from "./colors";
 import { RES_FOR_ZOOM } from "./config";
 import { cellsFor, visibleTiles, type Cell, type Tile } from "./tiles";
@@ -106,7 +106,6 @@ export function createMapView(opts: MapViewOptions): MapView {
     }
     void refresh();
   });
-  map.addControl(slider, "top-right");
   map.addControl(
     new AttributionControl({
       compact: true,
@@ -114,6 +113,10 @@ export function createMapView(opts: MapViewOptions): MapView {
         'Census: <a href="https://longhorizon.eco/">Long Horizon Observatory</a>, from <a href="https://www.ncei.noaa.gov/">NOAA NCEI</a> / <a href="https://iho.int/en/data-centre-for-digital-bathymetry">IHO DCDB</a> data. Not for navigation.',
     }),
   );
+  collapseCredits(map);
+  // Bottom right, just above the (i) (later controls stack above earlier ones in a bottom corner), so
+  // the corner under the zoom buttons stays clear for the map.
+  map.addControl(slider, "bottom-right");
   const overlay = new MapboxOverlay({ interleaved: true, layers: [] });
   map.addControl(overlay);
 

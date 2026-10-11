@@ -75,3 +75,27 @@ export function setBasemap(map: MapLibreMap, kind: Basemap, onReady: () => void)
   map.once("style.load", onReady);
   applyBasemap(map, kind);
 }
+
+/**
+ * Map credits as a small (i) button: MapLibre's compact attribution opens on load, so close it once the
+ * map is up. The credits stay one click away.
+ */
+export function collapseCredits(map: MapLibreMap): void {
+  let touched = false; // once the viewer uses the (i), it is theirs to open and close
+  map.getContainer().addEventListener(
+    "click",
+    (e) => {
+      if ((e.target as Element).closest(".maplibregl-ctrl-attrib-button")) touched = true;
+    },
+    true,
+  );
+  const close = () => {
+    if (touched) return;
+    const el = map.getContainer().querySelector<HTMLElement>(".maplibregl-ctrl-attrib");
+    el?.classList.remove("maplibregl-compact-show");
+    el?.removeAttribute("open");
+  };
+  // MapLibre opens the compact credits when its first attribution arrives, which can be after load.
+  map.on("styledata", close);
+  map.on("load", close);
+}

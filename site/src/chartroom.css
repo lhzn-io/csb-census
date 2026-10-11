@@ -357,6 +357,9 @@ body.landing-sp .mast { min-height: var(--mast); }
 .maplibregl-ctrl-group button span { filter: invert(1); }
 .maplibregl-ctrl-attrib { background: rgba(17, 17, 17, 0.7) !important; color: var(--dim) !important; font-family: var(--sans); font-size: 10px; }
 .maplibregl-ctrl-attrib a { color: var(--dim) !important; }
+/* The credits collapse to an (i): a light icon on the dark panel. */
+.maplibregl-ctrl-attrib-button { filter: invert(0.8); }
+.maplibregl-ctrl-attrib.maplibregl-compact { min-height: 24px; }
 .deck-tooltip { font-family: var(--mono) !important; font-size: 10.5px !important; background: rgba(17, 17, 17, 0.92) !important; border-left: 2px solid var(--yellow); }
 
 @media (max-width: 900px) {
