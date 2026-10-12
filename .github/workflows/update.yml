@@ -1,11 +1,11 @@
 name: Census update
 
 on:
-  # The Cloudflare Worker in poller/ starts an incremental run within minutes of each NCEI batch
-  # (workflow_dispatch). The schedule is the fallback: incremental at :55 after each batch hour, and
-  # the daily reconcile against the full bucket listing.
+  # Incremental runs at :10 and :40 after each NCEI batch hour (GitHub starts scheduled runs 25 to 40
+  # minutes late; the second slot catches a late batch or a dropped run and is a short no-op otherwise),
+  # and the daily reconcile against the full bucket listing.
   schedule:
-    - cron: "55 0,6,12,18 * * *"
+    - cron: "10,40 0,6,12,18 * * *"
     - cron: "15 3 * * *"
   workflow_dispatch:
     inputs:

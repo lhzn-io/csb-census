@@ -19,7 +19,8 @@ Horizon Observatory alongside
 [csb-trusted-node](https://github.com/lhzn-io/csb-trusted-node).
 
 > **Status:** pre-alpha. The full-archive backfill is complete, and the 6-hourly
-> updates are in their final validation run.
+> updates run on GitHub Actions and publish to
+> [csb.longhorizon.eco](https://csb.longhorizon.eco).
 
 ## Method in one paragraph
 

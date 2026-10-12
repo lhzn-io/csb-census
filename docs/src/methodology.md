@@ -157,6 +157,12 @@ Once a day, a reconcile run compares the full bucket listing with the index:
   the affected (provider, collection month) pairs are queued for a rebaseline.
 - A file whose ETag has changed is treated as removed and then republished.
 
+The working tables these runs read and write (the file index, cell and
+vessel-day counts, and the run log) are mirrored after every run to the
+repository's public `state` release as Parquet. They are a mechanical copy of
+NCEI's public archive, provider label and platform ID included, with no analysis
+beyond the counts described here.
+
 ## Published data
 
 The dashboard reads static files, so anyone can download and re-check them:
