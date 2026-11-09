@@ -1,3 +1,5 @@
+import { currentTheme } from "./theme";
+
 export type RGBA = [number, number, number, number];
 type Stop = [number, [number, number, number]];
 
@@ -93,12 +95,41 @@ export function reachBins(now = new Date()): { from: number; label: string }[] {
   return bins;
 }
 
+/**
+ * Reach: one sequential ramp per theme, blue-gray through teal and green to gold, in even CIELAB L* steps
+ * and mirrored by theme so the newest ground always stands out: brightest on Night (L* 50 to 86), darkest on
+ * Day (L* 64 to 42). Every class is covered ground, so none fades; composited at the default data opacity,
+ * the oldest class sits at least 12 ΔE2000 from either sea. No reds or magentas, which read as warnings.
+ * The stops were sampled from LCh and checked against both basemaps and for color-vision deficiency.
+ */
+const REACH_STEPS: Record<"dark" | "light", [number, number, number][]> = {
+  dark: [
+    [57, 125, 168],
+    [1, 151, 174],
+    [4, 175, 164],
+    [81, 197, 129],
+    [171, 208, 89],
+    [255, 209, 109],
+  ],
+  light: [
+    [99, 162, 206],
+    [4, 158, 182],
+    [0, 148, 139],
+    [2, 139, 78],
+    [86, 121, 1],
+    [125, 95, 0],
+  ],
+};
+
 export function reachColor(firstMonth: string | null | undefined, bins = reachBins()): RGBA {
   const year = Number((firstMonth ?? "").slice(0, 4)) || -Infinity;
   let i = 0;
   while (i + 1 < bins.length && year >= bins[i + 1].from) i++;
-  const t = i / (bins.length - 1);
-  return ramp(COUNTS, t, Math.round(70 + 170 * t));
+  // One ramp per theme (and so per basemap); the steps stretch over however many year bins there are.
+  const steps = REACH_STEPS[currentTheme()];
+  const t = bins.length > 1 ? i / (bins.length - 1) : 1;
+  const [r, g, b] = steps[Math.round(t * (steps.length - 1))];
+  return [r, g, b, 235];
 }
 
 export function dupColor(share: number): RGBA {

@@ -21,6 +21,20 @@ const slug = (text: string): string =>
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "");
 
+/** The first paragraph of one glossary term (by its heading's id), as inline HTML, for the choosers' (i) notes. */
+export function termHtml(id: string): string {
+  const lines = glossary.replace(/\r/g, "").split("\n");
+  const at = lines.findIndex((l) => l.startsWith("### ") && slug(l.slice(4)) === id);
+  if (at < 0) return "";
+  const para: string[] = [];
+  for (const l of lines.slice(at + 1)) {
+    if (l.startsWith("#")) break;
+    if (l.trim()) para.push(l);
+    else if (para.length) break;
+  }
+  return new Marked().parseInline(para.join(" "), { async: false });
+}
+
 /**
  * The intro and the glossary as HTML. Every heading gets an id (about.html#platform). On the page each heading
  * is also a link to itself; the drawer leaves that out, since the map pages keep the map position in the hash.

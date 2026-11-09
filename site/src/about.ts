@@ -3,6 +3,7 @@ import { $, renderReflection, renderUpdated, setFavicon } from "./chartroom";
 import { aboutHtml } from "./glossary";
 import { loadMeta } from "./metrics";
 import { column, loadRecent } from "./recentdata";
+import { wireThemeChooser } from "./theme";
 
 function render(): void {
   const article = $("doc-article");
@@ -21,6 +22,7 @@ function render(): void {
 }
 
 render();
+wireThemeChooser();
 // The strip, the masthead lines and the favicon, as on every page; the text never waits on data.
 Promise.all([loadMeta(), loadRecent()])
   .then(([meta, recent]) => {

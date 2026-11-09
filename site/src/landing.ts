@@ -1,11 +1,12 @@
 /** Landing page: the whole archive on a globe or the world-ocean square, with the ways in. */
-import { $, renderLadder, renderReflection, renderUpdated, setFavicon, wireAbout } from "./chartroom";
+import { $, renderLadder, renderReflection, renderUpdated, setFavicon, wireAbout, wireTermInfo } from "./chartroom";
 import { ARCHIVE_BINS, binColor, uniqueColor, type RGBA } from "./colors";
 import { DATA } from "./config";
 import { compact, loadMeta } from "./metrics";
 import { hours, loadRecent } from "./recentdata";
 import { cellsFor, loadManifest, type Cell } from "./tiles";
 import type { Globe } from "./globe";
+import { onTheme, token, wireThemeChooser } from "./theme";
 
 interface Land {
   size: number;
@@ -30,6 +31,7 @@ const state = {
   metric: "unique" as Metric,
   center: "spilhaus",
   land: null as HTMLCanvasElement | null,
+  landMask: null as Land | null,
   cells: null as Cells | null,
   nearest: null as ((u: number, v: number, maxDist: number) => number) | null,
   hover: -1,
@@ -80,9 +82,8 @@ function nearestCenter(): string {
 /** Recentered views run open ocean into the square's edges; fade the last few percent into the page. */
 const FADE = 0.07;
 const MAX_EXP = 8; // H3 r4: the densest cells hold around 10^8 soundings
-const OCEAN_IN = "#2b4457";
-const OCEAN_OUT = "#16232d";
-const LAND = "#111111"; // the page background: land disappears, leaving only the ocean and the data
+// Colors are theme tokens (chartroom.css): the ocean is --ocean-in to --ocean-out, and land is the page itself
+// (--bg), so land disappears and only the ocean and the data show.
 
 /** Census data lives under DATA; the land masks are static assets beside the page. */
 async function json<T>(path: string, base: string = DATA): Promise<T> {
@@ -91,12 +92,12 @@ async function json<T>(path: string, base: string = DATA): Promise<T> {
   return (await res.json()) as T;
 }
 
-/** The land mask as an offscreen canvas, scaled smoothly when drawn so coasts are soft. */
+/** The land mask as an offscreen canvas in the page color, scaled smoothly when drawn so coasts are soft. */
 function landCanvas(land: Land): HTMLCanvasElement {
   const c = document.createElement("canvas");
   c.width = c.height = land.size;
   const ctx = c.getContext("2d")!;
-  ctx.fillStyle = LAND;
+  ctx.fillStyle = token("--bg");
   land.runs.forEach((row, y) => {
     for (let i = 0; i < row.length; i += 2) ctx.fillRect(row[i], y, row[i + 1], 1);
   });
@@ -116,6 +117,8 @@ function color(i: number): RGBA {
 /** Fade all four edges into the page color, so the square's straight cuts dissolve. */
 function fadeEdges(ctx: CanvasRenderingContext2D, side: number): void {
   const band = side * FADE;
+  const page = token("--bg");
+  const clear = `${page}00`; // the page color, fully transparent (tokens are #rrggbb)
   const sides: [number, number, number, number, number, number, number, number][] = [
     [0, 0, 0, band, 0, 0, side, band], // top
     [0, side, 0, side - band, 0, side - band, side, band], // bottom
@@ -124,8 +127,8 @@ function fadeEdges(ctx: CanvasRenderingContext2D, side: number): void {
   ];
   for (const [x0, y0, x1, y1, rx, ry, rw, rh] of sides) {
     const g = ctx.createLinearGradient(x0, y0, x1, y1);
-    g.addColorStop(0, LAND);
-    g.addColorStop(1, "rgba(17,17,17,0)");
+    g.addColorStop(0, page);
+    g.addColorStop(1, clear);
     ctx.fillStyle = g;
     ctx.fillRect(rx, ry, rw, rh);
   }
@@ -153,8 +156,8 @@ function draw(): void {
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   // The ocean: a slate glow from the center of the square, where Spilhaus puts the open sea.
   const glow = ctx.createRadialGradient(side / 2, side / 2, side * 0.05, side / 2, side / 2, side * 0.72);
-  glow.addColorStop(0, OCEAN_IN);
-  glow.addColorStop(1, OCEAN_OUT);
+  glow.addColorStop(0, token("--ocean-in"));
+  glow.addColorStop(1, token("--ocean-out"));
   ctx.fillStyle = glow;
   ctx.fillRect(0, 0, side, side);
   if (state.land) {
@@ -176,7 +179,7 @@ function draw(): void {
   }
   if (state.center !== "spilhaus") fadeEdges(ctx, side);
   if (state.hover >= 0) {
-    ctx.strokeStyle = "#decf03";
+    ctx.strokeStyle = token("--accent");
     ctx.lineWidth = 1.2;
     ctx.beginPath();
     ctx.arc(c.u[state.hover] * side, c.v[state.hover] * side, r + 4, 0, Math.PI * 2);
@@ -269,19 +272,18 @@ function ladder(): void {
 }
 
 /** Load (once) and show the land mask and projected cells for one center of the projection. */
-const loaded = new Map<string, Promise<[HTMLCanvasElement, Cells]>>();
+const loaded = new Map<string, Promise<[Land, Cells]>>();
 async function useCenter(name: string): Promise<void> {
   if (!loaded.has(name)) {
     loaded.set(
       name,
-      Promise.all([json<Land>(`spilhaus/${name}/land.json`, "."), json<Cells>(`spilhaus/${name}/cells.json`)]).then(
-        ([land, cells]) => [landCanvas(land), cells],
-      ),
+      Promise.all([json<Land>(`spilhaus/${name}/land.json`, "."), json<Cells>(`spilhaus/${name}/cells.json`)]),
     );
   }
   const [land, cells] = await loaded.get(name)!;
   state.center = name;
-  state.land = land;
+  state.landMask = land;
+  state.land = landCanvas(land);
   state.cells = cells;
   state.nearest = indexCells(cells);
   state.hover = -1;
@@ -357,6 +359,14 @@ function wireDrawer(): void {
 async function main(): Promise<void> {
   wireDrawer();
   wireAbout();
+  wireTermInfo();
+  wireThemeChooser();
+  // Canvas and globe colors come from the theme tokens: repaint them when the theme changes.
+  onTheme(() => {
+    if (state.landMask) state.land = landCanvas(state.landMask);
+    state.globe?.restyle();
+    draw();
+  });
   ladder();
   // A visitor's own earlier choice wins; otherwise start near them.
   let initial = nearestCenter();
@@ -391,7 +401,7 @@ async function main(): Promise<void> {
 
   $("sp-figures").innerHTML = [
     [compact(meta.published), "soundings published"],
-    [compact(meta.unique), "unique"],
+    [compact(meta.unique), "unique soundings"],
     [compact(meta.vessel_days ?? 0), "vessel-days"],
     [meta.platforms.toLocaleString("en"), "platforms"],
   ]
@@ -399,7 +409,8 @@ async function main(): Promise<void> {
     .join("");
   const w = recent.strip["7d"];
   $("recent-text").textContent =
-    `This week: ${compact(w.published)} soundings from ${w.platforms} platforms, ${w.new_platforms} of them new; median lag ${hours(w.median_lag_h)}.`;
+    `Last 7 days: ${compact(w.published)} soundings published from ${w.platforms} platforms (${w.new_platforms} new). ` +
+    `Median publication lag ${hours(w.median_lag_h)}.`;
   // Reflection lines: unique soundings in the last seven publication batches, as on the recent page.
   const uni = recent.batches.rows.map((r) => Number(r[recent.batches.columns.indexOf("unique")]));
   renderReflection(uni.slice(-7).reverse(), "unique soundings, last 7 batches");

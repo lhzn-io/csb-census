@@ -12,6 +12,10 @@
       rel="stylesheet"
       href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Josefin+Sans:wght@300;400;600;700&family=Martian+Mono:wght@300;400;500&display=swap"
     />
+    <!-- Theme before first paint (src/theme.ts): Day is data-theme="light"; Night is the default. -->
+    <script>
+      try { if (localStorage.getItem("csb-census:theme") === "light") document.documentElement.dataset.theme = "light"; } catch {}
+    </script>
   </head>
   <body class="hz">
     <div class="strip"><p class="updated" id="updated" aria-live="polite"></p><a class="strip-link" href="about.html">About</a></div>
@@ -24,7 +28,6 @@
         <svg class="reflection" id="reflection" role="img"></svg>
         <span class="reflection-title"></span>
       </div>
-      <p class="mast-note" id="mast-note">Crowdsourced bathymetry published by the <a href="https://iho.int/en/data-centre-for-digital-bathymetry">IHO DCDB</a>, counted as it arrives.</p>
       <nav class="tabs" aria-label="View controls">
         <div class="tabgroup">
           <span class="tabgroup-label">View</span>
@@ -36,17 +39,17 @@
         <div class="tabgroup" role="radiogroup" aria-label="Map">
           <span class="tabgroup-label">Map</span>
           <div class="tabgroup-row">
-            <label class="tab"><input type="radio" name="window" value="24h" checked />24 hours</label>
-            <label class="tab"><input type="radio" name="window" value="7d" />7 days</label>
-            <label class="tab"><input type="radio" name="window" value="30d" />30 days</label>
-            <label class="tab"><input type="radio" name="window" value="365d" />12 months</label>
+            <label class="tab"><input type="radio" name="window" value="24h" data-term="publication-time" checked />24 hours</label>
+            <label class="tab"><input type="radio" name="window" value="7d" data-term="collection-time" />7 days</label>
+            <label class="tab"><input type="radio" name="window" value="30d" data-term="collection-time" />30 days</label>
+            <label class="tab"><input type="radio" name="window" value="365d" data-term="collection-time" />12 months</label>
           </div>
         </div>
-        <div class="tabgroup" role="radiogroup" aria-label="Chart">
-          <span class="tabgroup-label">Chart</span>
+        <div class="tabgroup" role="radiogroup" aria-label="Theme">
+          <span class="tabgroup-label">Theme</span>
           <div class="tabgroup-row">
-            <label class="tab"><input type="radio" name="basemap" value="dark" checked />Night</label>
-            <label class="tab"><input type="radio" name="basemap" value="light" />Day</label>
+            <label class="tab"><input type="radio" name="theme" value="dark" checked />Night</label>
+            <label class="tab"><input type="radio" name="theme" value="light" />Day</label>
           </div>
         </div>
       </nav>

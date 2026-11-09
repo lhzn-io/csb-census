@@ -50,8 +50,7 @@ come from a provider, an ingest retry or a data-center policy.
 
 One platform collecting in one place on one UTC day. "One place" is an H3 cell
 at resolution 8 (about 0.7 km²); on coarser maps, a vessel-day counts once per
-cell however far the vessel moved inside it. Vessel-days measure how many boats
-were somewhere, where sounding counts mostly measure how long loggers ran.
+cell however far the vessel moved inside it.
 
 ### Underway and stationary
 
@@ -186,6 +185,15 @@ A sounding passes through several hands before the census sees it:
 
 The census sees only the last step. Each earlier step can delay data, repeat it
 or keep it back, and the census cannot tell which happened.
+
+### Participating vessels
+
+Any vessel with an echosounder and a GNSS receiver on its instrument network
+can contribute, if its owner registers it with a Trusted Node. Contributors
+include cruise ships and other commercial vessels, fishing boats, ferries, tugs and pilot
+boats, research and government vessels, and yachts and smaller recreational
+craft. B-12 makes vessel type optional and the open archive does not carry it,
+so the census cannot break its counts down by kind of vessel.
 
 ### Logger
 

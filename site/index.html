@@ -5,13 +5,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
     <title>CSB Census</title>
-    <meta name="description" content="An open census of every crowdsourced depth sounding published by the IHO Data Centre for Digital Bathymetry, mapped on the world ocean." />
+    <meta name="description" content="Counts and maps of the crowdsourced depth soundings published by the IHO Data Centre for Digital Bathymetry, updated after each NOAA NCEI batch." />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
       rel="stylesheet"
       href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Josefin+Sans:wght@300;400;600;700&family=Martian+Mono:wght@300;400;500&display=swap"
     />
+    <!-- Theme before first paint (src/theme.ts): Day is data-theme="light"; Night is the default. -->
+    <script>
+      try { if (localStorage.getItem("csb-census:theme") === "light") document.documentElement.dataset.theme = "light"; } catch {}
+    </script>
   </head>
   <body class="hz landing-sp">
     <div class="strip"><p class="updated" id="updated" aria-live="polite"></p><a class="strip-link" href="about.html">About</a></div>
@@ -24,7 +28,7 @@
         <svg class="reflection" id="reflection" role="img"></svg>
         <span class="reflection-title"></span>
       </div>
-      <p class="mast-note">An open census of every crowdsourced depth sounding published by the <a href="https://iho.int/en/data-centre-for-digital-bathymetry">IHO DCDB</a>.</p>
+      <p class="mast-note">Counts of the crowdsourced depth soundings published by the <a href="https://iho.int/en/data-centre-for-digital-bathymetry">IHO DCDB</a>.</p>
       <nav class="tabs" aria-label="View controls">
         <div class="tabgroup">
           <span class="tabgroup-label">View</span>
@@ -36,13 +40,20 @@
         <div class="tabgroup" role="radiogroup" aria-label="Show">
           <span class="tabgroup-label">Show</span>
           <div class="tabgroup-row">
-            <label class="tab"><input type="radio" name="metric" value="unique" checked />Soundings</label>
-            <label class="tab"><input type="radio" name="metric" value="vessels" />Vessel-days</label>
+            <label class="tab"><input type="radio" name="metric" value="unique" data-term="sounding" checked />Soundings</label>
+            <label class="tab"><input type="radio" name="metric" value="vessels" data-term="vessel-day" />Vessel-days</label>
           </div>
         </div>
         <div class="tabgroup">
           <span class="tabgroup-label">Period</span>
           <div class="tabgroup-row"><span class="tab static">All time</span></div>
+        </div>
+        <div class="tabgroup" role="radiogroup" aria-label="Theme">
+          <span class="tabgroup-label">Theme</span>
+          <div class="tabgroup-row">
+            <label class="tab"><input type="radio" name="theme" value="dark" checked />Night</label>
+            <label class="tab"><input type="radio" name="theme" value="light" />Day</label>
+          </div>
         </div>
       </nav>
     </header>
@@ -51,26 +62,33 @@
 
 
       <section class="sp-side">
-        <h1 class="sp-title">Vessels of<br />opportunity<br />measure the<br />changing seafloor</h1>
+        <h1 class="sp-title">Crowdsourced<br />bathymetry<br />census</h1>
         <p class="sp-lede">
-          <a href="https://seabed2030.org/">Seabed 2030</a> aims to map the whole ocean floor by 2030, and every boat with an echosounder can help.
-          This is a live, open census of each depth sounding shared through the <a href="https://iho.int/">IHO</a>'s
-          <a href="https://iho.int/en/crowdsourced-bathymetry">Crowdsourced Bathymetry</a> initiative and its <a href="https://iho.int/en/data-centre-for-digital-bathymetry">Data Centre for Digital Bathymetry</a>:
-          counted, deduplicated and mapped, and updated four times a day as <a href="https://www.ncei.noaa.gov/">NOAA NCEI</a> publishes each batch to
-          the <a href="https://registry.opendata.aws/noaa-dcdb-bathymetry-pds/">open archive</a>. Browse the raw soundings in the <a href="https://www.ncei.noaa.gov/maps/iho_dcdb/">DCDB data viewer</a>.
+          <a href="about.html#participating-vessels">Participating commercial and recreational vessels</a> log depth and position with their own echosounders and GNSS
+          receivers during routine operations.
+          Under the <a href="https://iho.int/">IHO</a>'s <a href="https://iho.int/en/crowdsourced-bathymetry">Crowdsourced Bathymetry</a> initiative,
+          Trusted Nodes submit these soundings to the <a href="https://iho.int/en/data-centre-for-digital-bathymetry">Data Centre for Digital Bathymetry</a> (DCDB),
+          and <a href="https://www.ncei.noaa.gov/">NOAA NCEI</a> publishes them to an <a href="https://registry.opendata.aws/noaa-dcdb-bathymetry-pds/">open archive</a> in four batches a day.
+          The archive is one of the sources for the <a href="https://seabed2030.org/">Seabed 2030</a> global bathymetry.
+        </p>
+        <p class="sp-lede">
+          This census reads each batch, identifies soundings published more than once, and counts published and unique
+          soundings per cell of an H3 grid.
+          It counts what was published; it does not assess accuracy. Individual soundings can be viewed in the
+          <a href="https://www.ncei.noaa.gov/maps/iho_dcdb/">DCDB data viewer</a>.
         </p>
         <div class="sp-figures" id="sp-figures"></div>
         <div class="sp-ladder" id="ladder"></div>
         <nav class="sp-cards" aria-label="Explore">
           <a class="sp-card" href="archive.html">
             <span class="sp-card-tag">Full archive</span>
-            <span class="sp-card-text">Everything published since 2017, by place: soundings, vessel-days and duplicates.</span>
-            <span class="sp-card-go">Open the chart &rarr;</span>
+            <span class="sp-card-text">All soundings published since 2017, mapped by cell: unique soundings, vessel-days and duplicates.</span>
+            <span class="sp-card-go">Archive map &rarr;</span>
           </a>
           <a class="sp-card" href="recent.html">
             <span class="sp-card-tag">Recent activity</span>
-            <span class="sp-card-text" id="recent-text">What came in today, this week and this month, and where boats have been.</span>
-            <span class="sp-card-go">Open the log &rarr;</span>
+            <span class="sp-card-text" id="recent-text">Soundings published in the last day, week and month, and where they were collected.</span>
+            <span class="sp-card-go">Recent activity &rarr;</span>
           </a>
         </nav>
         <p class="note">
@@ -79,8 +97,8 @@
           navigation. <a href="https://github.com/lhzn-io/csb-census/blob/main/docs/src/methodology.md">Methodology</a> &middot; <a href="about.html">About</a> &middot; <a href="https://github.com/lhzn-io/csb-census">Code</a>
         </p>
         <p class="note aside">
-          <span class="aside-tag">Fun fact</span> <a href="https://github.com/lhzn-io">lhzn-io</a> maps the seabed of the Long Island Sound with a <a href="https://github.com/CCOMJHC/WIBL">WIBL</a> logger
-          from the <a href="https://www.ccom.unh.edu/">UNH Center for Coastal and Ocean Mapping</a>.
+          <span class="aside-tag">Note</span> Long Horizon Observatory also collects crowdsourced bathymetry in the Long Island Sound, with a
+          <a href="https://github.com/CCOMJHC/WIBL">WIBL</a> logger from the <a href="https://www.ccom.unh.edu/">UNH Center for Coastal and Ocean Mapping</a>.
         </p>
       </section>
 

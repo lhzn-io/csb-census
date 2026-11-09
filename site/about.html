@@ -12,6 +12,10 @@
       rel="stylesheet"
       href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Josefin+Sans:wght@300;400;600;700&family=Martian+Mono:wght@300;400;500&display=swap"
     />
+    <!-- Theme before first paint (src/theme.ts): Day is data-theme="light"; Night is the default. -->
+    <script>
+      try { if (localStorage.getItem("csb-census:theme") === "light") document.documentElement.dataset.theme = "light"; } catch {}
+    </script>
   </head>
   <body class="hz doc">
     <div class="strip"><p class="updated" id="updated" aria-live="polite"></p><a class="strip-link" href="about.html" aria-current="page">About</a></div>
@@ -31,6 +35,13 @@
           <div class="tabgroup-row">
             <a class="tab" href="archive.html">Archive</a>
             <a class="tab" href="recent.html">Recent</a>
+          </div>
+        </div>
+        <div class="tabgroup" role="radiogroup" aria-label="Theme">
+          <span class="tabgroup-label">Theme</span>
+          <div class="tabgroup-row">
+            <label class="tab"><input type="radio" name="theme" value="dark" checked />Night</label>
+            <label class="tab"><input type="radio" name="theme" value="light" />Day</label>
           </div>
         </div>
       </nav>

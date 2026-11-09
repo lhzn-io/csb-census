@@ -1,5 +1,5 @@
 /** Full archive: every sounding DCDB has published, by place. */
-import { $, frameChart, measureSwitch, renderUpdated, renderColumns, renderHorizon, renderLadder, renderReadouts, renderReflection, setFavicon, table, wireAbout, wireLogbook, wireMeasureSwitch, YELLOW, type Measure } from "./chartroom";
+import { $, frameChart, measureSwitch, renderUpdated, renderColumns, renderHorizon, renderLadder, renderReadouts, renderReflection, setFavicon, table, wireAbout, wireLogbook, wireTermInfo, wireMeasureSwitch, type Measure } from "./chartroom";
 import { loadSeries, type Series } from "./charts";
 import { ARCHIVE_BINS, binColor, dupColor, duration, reachBins, reachColor, underwayColor, uniqueColor, type RGBA } from "./colors";
 import { loadLis, renderLisSummary } from "./lis";
@@ -8,6 +8,7 @@ import { createMapView, whenLoaded } from "./mapview";
 import { compact, loadMeta, type Meta } from "./metrics";
 import { loadFineTiles, loadManifest, type Cell, type LayerManifest, type Tile } from "./tiles";
 import { column, loadRecent } from "./recentdata";
+import { currentTheme, onTheme, wireThemeChooser } from "./theme";
 
 type Metric = "unique" | "traffic" | "reach" | "dup";
 
@@ -56,15 +57,14 @@ function color(d: Cell, res: number): RGBA {
 
 const view = createMapView({
   container: "map",
-  basemap: "dark",
-  storageKey: "csb-census:basemap:archive",
   // Traffic stops at r8, where vessel-days and underway time are measured; the other maps reach r9.
   pool: () => {
     wantFine();
     return [...(state.manifest?.tiles ?? []), ...state.fineTiles].filter((t) => state.metric !== "traffic" || t.res <= 8);
   },
   color,
-  colorKey: () => `${state.metric}:${state.measure}`,
+  // Reach has a ramp per theme, so the theme is part of the key.
+  colorKey: () => `${state.metric}:${state.measure}:${currentTheme()}`,
   tooltip: (c: Cell) => {
     const years = c.first_year === c.last_year ? `${c.first_year}` : `${c.first_year}-${c.last_year}`;
     // r9 cells carry soundings only; the traffic lines show where traffic was measured (r8 and coarser).
@@ -144,7 +144,7 @@ function band(meta: Meta, series: Series): void {
   const years = byYear(series.community);
   renderColumns(
     years.map(([, u, r, c]) => [u, r, c]),
-    [YELLOW, "rgba(255,255,255,0.35)", "rgba(255,255,255,0.14)"],
+    ["var(--now)", "var(--chart-pub)", "var(--chart-cross)"],
     { normalize: true, labels: years.map(([y]) => `’${y.slice(2)}`) },
   );
   renderReflection(years.map(([, u]) => u).reverse().slice(0, 7), "unique soundings, last 7 years");
@@ -195,6 +195,8 @@ async function main(): Promise<void> {
   wireLogbook();
   wireBookmarks(view.map);
   wireAbout();
+  wireTermInfo();
+  wireThemeChooser();
   const [meta, manifest, series] = await Promise.all([loadMeta(), loadManifest(), loadSeries()]);
   state.manifest = manifest;
   band(meta, series);
@@ -217,6 +219,8 @@ async function main(): Promise<void> {
       void view.refresh();
     });
   }
+  // The map view swaps its basemap itself; the legend follows (Reach has a ramp per theme).
+  onTheme(() => ladder());
   whenLoaded(view.map, () => {
     frameChart(view.map);
     void view.refresh();

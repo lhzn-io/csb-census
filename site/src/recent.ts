@@ -1,11 +1,12 @@
 /** Recent activity: what NCEI published lately, and where boats have been. */
-import { $, frameChart, measureSwitch, renderUpdated, renderColumns, renderHorizon, renderLadder, renderReadouts, renderReflection, setFavicon, table, wireAbout, wireLogbook, wireMeasureSwitch, YELLOW, type Measure } from "./chartroom";
+import { $, frameChart, measureSwitch, renderUpdated, renderColumns, renderHorizon, renderLadder, renderReadouts, renderReflection, setFavicon, table, wireAbout, wireLogbook, wireTermInfo, wireMeasureSwitch, type Measure } from "./chartroom";
 import { AGE_STEPS, RECENT_BINS, binColor, duration, freshColor, underwayColor, type RGBA } from "./colors";
 import { wireBookmarks } from "./bookmarks";
 import { createMapView, whenLoaded } from "./mapview";
 import { compact, loadMeta } from "./metrics";
 import { column, epochs, hours, loadRecent, type Recent, type WindowName } from "./recentdata";
 import { loadManifest, type Cell, type LayerManifest } from "./tiles";
+import { wireThemeChooser } from "./theme";
 
 /** "24h" is by publication (what NCEI released); the others are by collection day. */
 type MapWindow = "24h" | "7d" | "30d" | "365d";
@@ -35,8 +36,6 @@ function collectedText(c: Cell): string {
 
 const view = createMapView({
   container: "map",
-  basemap: "dark",
-  storageKey: "csb-census:basemap:recent",
   pool: () => state.manifest?.windows?.[state.window] ?? [],
   color: (d, res) =>
     state.window === "24h"
@@ -158,6 +157,8 @@ async function main(): Promise<void> {
   wireLogbook();
   wireBookmarks(view.map);
   wireAbout();
+  wireTermInfo();
+  wireThemeChooser();
   const [recent, manifest, meta] = await Promise.all([loadRecent(), loadManifest(), loadMeta()]);
   state.manifest = manifest;
   state.recent = recent;
@@ -177,7 +178,7 @@ async function main(): Promise<void> {
   horizon(recent, "pub");
   const pub = column(batches, "published");
   const uni = column(batches, "unique");
-  renderColumns(pub.map((p, i) => [uni[i], Math.max(0, p - uni[i])]), [YELLOW, "rgba(255,255,255,0.35)"]);
+  renderColumns(pub.map((p, i) => [uni[i], Math.max(0, p - uni[i])]), ["var(--now)", "var(--chart-pub)"]);
   logbook(recent);
   renderUpdated(meta);
 

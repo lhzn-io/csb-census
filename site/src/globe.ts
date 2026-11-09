@@ -1,7 +1,7 @@
 /**
- * The landing globe: every H3 r4 cell of the archive on a spinning globe. Water is slate and land is the
- * page color, as on the ocean square, so only the ocean and the data show. Drag to turn it; click to open
- * the archive chart at that spot. Loaded only when the globe view is on.
+ * The landing globe: every H3 r4 cell of the archive on a spinning globe. Water is the theme's --globe-ocean
+ * and land is the page color (--bg), as on the ocean square, so only the ocean and the data show. Drag to turn
+ * it; click to open the archive chart at that spot. Loaded only when the globe view is on.
  */
 import { cellToBoundary, latLngToCell } from "h3-js";
 import { AttributionControl, Map as MapLibreMap, setWorkerUrl, type GeoJSONSource, type StyleSpecification } from "maplibre-gl";
@@ -11,14 +11,14 @@ import workerUrl from "maplibre-gl/dist/maplibre-gl-csp-worker.js?url";
 import { collapseCredits } from "./basemap";
 import type { RGBA } from "./colors";
 import type { Cell } from "./tiles";
+import { token } from "./theme";
 
 setWorkerUrl(workerUrl);
 
-const OCEAN = "#22374a";
-const LAND = "#111111";
 const SPIN_DEG_PER_S = 3;
 
-const STYLE: StyleSpecification = {
+/** The globe's style, in the current theme's colors. */
+const style = (): StyleSpecification => ({
   version: 8,
   projection: { type: "globe" },
   sources: {
@@ -27,8 +27,8 @@ const STYLE: StyleSpecification = {
     cells: { type: "geojson", data: { type: "FeatureCollection", features: [] }, promoteId: "i" },
   },
   layers: [
-    { id: "land", type: "background", paint: { "background-color": LAND } },
-    { id: "water", type: "fill", source: "omt", "source-layer": "water", paint: { "fill-color": OCEAN } },
+    { id: "land", type: "background", paint: { "background-color": token("--bg") } },
+    { id: "water", type: "fill", source: "omt", "source-layer": "water", paint: { "fill-color": token("--globe-ocean") } },
     {
       id: "cells",
       type: "fill",
@@ -40,18 +40,20 @@ const STYLE: StyleSpecification = {
       type: "line",
       source: "cells",
       paint: {
-        "line-color": "#decf03",
+        "line-color": token("--accent"),
         "line-width": 1.5,
         "line-opacity": ["case", ["boolean", ["feature-state", "hover"], false], 1, 0],
       },
     },
   ],
-};
+});
 
 export interface Globe {
   map: MapLibreMap;
   /** Recolor every cell (after the metric changes). */
   recolor: (color: (c: Cell) => RGBA) => void;
+  /** Repaint land, water and the hover outline in the current theme. */
+  restyle: () => void;
   /** Turn the globe to face a center, as [lon, lat]. */
   face: (center: [number, number]) => void;
 }
@@ -81,7 +83,7 @@ export function createGlobe(opts: {
   const el = document.getElementById(opts.container)!;
   const map = new MapLibreMap({
     container: opts.container,
-    style: STYLE,
+    style: style(),
     center: opts.center,
     zoom: fitZoom(el),
     maxZoom: 5,
@@ -192,6 +194,12 @@ export function createGlobe(opts: {
   return {
     map,
     recolor: paint,
+    restyle: () => {
+      if (!map.isStyleLoaded()) return; // a style still loading was built in the current colors
+      map.setPaintProperty("land", "background-color", token("--bg"));
+      map.setPaintProperty("water", "fill-color", token("--globe-ocean"));
+      map.setPaintProperty("hover", "line-color", token("--accent"));
+    },
     face: (center) => {
       stop();
       map.flyTo({ center, zoom: map.getZoom(), duration: 1600 });

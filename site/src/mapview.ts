@@ -5,19 +5,16 @@ import { AttributionControl, Map as MapLibreMap, NavigationControl, setWorkerUrl
 import "maplibre-gl/dist/maplibre-gl.css";
 import workerUrl from "maplibre-gl/dist/maplibre-gl-csp-worker.js?url";
 
-import { applyBasemap, collapseCredits, dataBefore, isBasemap, setBasemap, type Basemap } from "./basemap";
+import { applyBasemap, collapseCredits, dataBefore, setBasemap } from "./basemap";
 import type { RGBA } from "./colors";
 import { RES_FOR_ZOOM } from "./config";
+import { currentTheme, onTheme } from "./theme";
 import { cellsFor, visibleTiles, type Cell, type Tile } from "./tiles";
 
 export interface MapViewOptions {
   container: string;
   center?: [number, number];
   zoom?: number;
-  /** Basemap when the viewer has not chosen one on this page before. */
-  basemap: Basemap;
-  /** Remembers the viewer's basemap choice per page. */
-  storageKey: string;
   /** Tiles currently on show (archive, a provider, or a recent window). */
   pool: () => Tile[];
   color: (cell: Cell, res: number) => RGBA;
@@ -72,18 +69,8 @@ class OpacityControl implements IControl {
   }
 }
 
-function savedBasemap(key: string, fallback: Basemap): Basemap {
-  try {
-    const v = localStorage.getItem(key);
-    return isBasemap(v) ? v : fallback;
-  } catch {
-    return fallback;
-  }
-}
-
 /** A MapLibre map with OpenFreeMap basemaps and a deck.gl H3 overlay that loads only the tiles in view. */
 export function createMapView(opts: MapViewOptions): MapView {
-  const initial = savedBasemap(opts.storageKey, opts.basemap);
   const map = new MapLibreMap({
     container: opts.container,
     // No style here: applyBasemap sets it just below, adding the relief (the constructor cannot transform one).
@@ -92,7 +79,7 @@ export function createMapView(opts: MapViewOptions): MapView {
     attributionControl: false,
     hash: true,
   });
-  applyBasemap(map, initial);
+  applyBasemap(map, currentTheme()); // the basemap is the theme: Night is the dark style, Day the light one
   if (import.meta.env.DEV) (window as unknown as { csbMap: MapLibreMap }).csbMap = map; // console debugging
   map.addControl(new NavigationControl({ showCompass: false }), "top-right");
   // Data opacity: the viewer's own choice when they have made one, else see-through.
@@ -120,19 +107,8 @@ export function createMapView(opts: MapViewOptions): MapView {
   const overlay = new MapboxOverlay({ interleaved: true, layers: [] });
   map.addControl(overlay);
 
-  // Basemap radios (name="basemap"); the choice is a per-viewer convenience kept when storage allows.
-  for (const input of document.querySelectorAll<HTMLInputElement>('input[name="basemap"]')) {
-    input.checked = input.value === initial;
-    input.addEventListener("change", () => {
-      const kind = input.value as Basemap;
-      setBasemap(map, kind, () => void refresh());
-      try {
-        localStorage.setItem(opts.storageKey, kind);
-      } catch {
-        // storage unavailable (private window, blocked site data): the choice lasts for this visit
-      }
-    });
-  }
+  // The Theme chooser (theme.ts) switches the whole site; the map follows with the matching basemap.
+  onTheme((theme) => setBasemap(map, theme, () => void refresh()));
 
   const hex = (id: string, data: Cell[], res: number): Layer =>
     new H3HexagonLayer<Cell>({

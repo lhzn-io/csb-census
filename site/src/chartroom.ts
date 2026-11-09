@@ -8,6 +8,7 @@ import { compact } from "./metrics";
 export const $ = (id: string) => document.getElementById(id)!;
 const SVG = "http://www.w3.org/2000/svg";
 const MONTHS = ["J", "F", "M", "A", "M", "J", "J", "A", "S", "O", "N", "D"];
+/** The brand yellow, for the favicon (a fixed night tile). Page colors are tokens in chartroom.css. */
 export const YELLOW = "#decf03";
 
 export function el<K extends keyof SVGElementTagNameMap>(
@@ -113,7 +114,7 @@ export function renderReflection(values: number[], label: string): void {
     .slice(0, 7)
     .map((v, i) => {
       const w = 18 + 102 * Math.sqrt(v / max);
-      return `<line x1="0" x2="${w.toFixed(1)}" y1="${4 + i * 6.4}" y2="${4 + i * 6.4}" stroke="${YELLOW}" stroke-width="${(1.6 - i * 0.12).toFixed(2)}" stroke-opacity="${(1 - i * 0.1).toFixed(2)}"/>`;
+      return `<line x1="0" x2="${w.toFixed(1)}" y1="${4 + i * 6.4}" y2="${4 + i * 6.4}" style="stroke:var(--now)" stroke-width="${(1.6 - i * 0.12).toFixed(2)}" stroke-opacity="${(1 - i * 0.1).toFixed(2)}"/>`;
     })
     .join("");
   const title = svg.closest(".mast")?.querySelector<HTMLElement>(".reflection-title");
@@ -167,7 +168,7 @@ export interface HorizonOptions {
   hover: (i: number) => string;
 }
 
-/** A log-scaled series drawn as the horizon: yellow line over a soft fill, graduations and a hover rule. */
+/** A log-scaled series drawn as the horizon: the data line (--now) over a soft fill, graduations and a hover rule. */
 export function renderHorizon(o: HorizonOptions): void {
   const svg = $("horizon") as unknown as SVGSVGElement;
   const W = 1000;
@@ -193,14 +194,14 @@ export function renderHorizon(o: HorizonOptions): void {
 
   const defs = el("defs", {});
   const grad = el("linearGradient", { id: "hz-fill", x1: 0, y1: 0, x2: 0, y2: 1 });
-  grad.append(el("stop", { offset: "0%", "stop-color": YELLOW, "stop-opacity": 0.28 }));
-  grad.append(el("stop", { offset: "100%", "stop-color": YELLOW, "stop-opacity": 0 }));
+  grad.append(el("stop", { offset: "0%", style: "stop-color:var(--now)", "stop-opacity": 0.28 }));
+  grad.append(el("stop", { offset: "100%", style: "stop-color:var(--now)", "stop-opacity": 0 }));
   defs.append(grad);
   svg.append(defs);
 
   const labels: string[] = [];
   const rule = (xx: number) =>
-    svg.append(el("line", { x1: xx, x2: xx, y1: 0, y2: H, stroke: "rgba(255,255,255,0.12)", "vector-effect": "non-scaling-stroke" }));
+    svg.append(el("line", { x1: xx, x2: xx, y1: 0, y2: H, style: "stroke:var(--chart-rule)", "vector-effect": "non-scaling-stroke" }));
   const start = new Date(x0 * 1000);
   if (o.ticks === "months") {
     for (let m = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + 1, 1)); m.getTime() / 1000 < x1; m.setUTCMonth(m.getUTCMonth() + 1)) {
@@ -219,24 +220,24 @@ export function renderHorizon(o: HorizonOptions): void {
   labels.push(`<span class="axis"></span>`);
   if (o.shadeFrom !== undefined) {
     const xs = px(Math.max(x0, o.shadeFrom));
-    svg.append(el("rect", { x: xs, y: 0, width: Math.max(0, W - xs), height: H, fill: "rgba(17,17,17,0.35)" }));
+    svg.append(el("rect", { x: xs, y: 0, width: Math.max(0, W - xs), height: H, style: "fill:var(--chart-shade)" }));
     if (o.shadeLabel) labels.push(`<span class="arriving" style="left:${(100 * xs) / W}%">${o.shadeLabel}</span>`);
   }
   const every = hi - lo > 4.5 ? 2 : 1; // at most a handful of scale lines
   for (let d = Math.floor(hi); d >= Math.ceil(lo); d -= every) {
     const yy = py(d);
-    svg.append(el("line", { x1: 0, x2: W, y1: yy, y2: yy, stroke: "rgba(255,255,255,0.16)", "stroke-dasharray": "2 4", "vector-effect": "non-scaling-stroke" }));
+    svg.append(el("line", { x1: 0, x2: W, y1: yy, y2: yy, style: "stroke:var(--chart-grid)", "stroke-dasharray": "2 4", "vector-effect": "non-scaling-stroke" }));
     labels.push(`<span class="decade" style="top:${(100 * yy) / H}%">${compact(10 ** d)}</span>`);
   }
   const main = pts(line);
   svg.append(el("path", { d: `M0,${H} L${main.join(" L")} L${W},${H} Z`, fill: "url(#hz-fill)" }));
   if (faint) {
-    svg.append(el("polyline", { points: pts(faint).join(" "), fill: "none", stroke: "rgba(255,255,255,0.4)", "stroke-width": 0.9, "vector-effect": "non-scaling-stroke" }));
+    svg.append(el("polyline", { points: pts(faint).join(" "), fill: "none", style: "stroke:var(--chart-faint)", "stroke-width": 0.9, "vector-effect": "non-scaling-stroke" }));
   }
-  svg.append(el("polyline", { points: main.join(" "), fill: "none", stroke: YELLOW, "stroke-width": 1.8, "vector-effect": "non-scaling-stroke" }));
+  svg.append(el("polyline", { points: main.join(" "), fill: "none", style: "stroke:var(--now)", "stroke-width": 1.8, "vector-effect": "non-scaling-stroke" }));
   $("horizon-labels").innerHTML = labels.join("");
 
-  const cursor = el("line", { x1: 0, x2: 0, y1: 0, y2: H, stroke: "#fff", "stroke-width": 1, "vector-effect": "non-scaling-stroke", visibility: "hidden" });
+  const cursor = el("line", { x1: 0, x2: 0, y1: 0, y2: H, style: "stroke:var(--chart-cursor)", "stroke-width": 1, "vector-effect": "non-scaling-stroke", visibility: "hidden" });
   svg.append(cursor);
   const hover = $("horizon-hover");
   svg.onmousemove = (e) => {
@@ -256,7 +257,7 @@ export function renderHorizon(o: HorizonOptions): void {
   };
 }
 
-/** Columns in the band's right panel: each column stacks its parts (bottom first). */
+/** Columns in the band's right panel: each column stacks its parts (bottom first). Fills are CSS colors, tokens included. */
 export function renderColumns(
   columns: number[][],
   fills: string[],
@@ -277,7 +278,7 @@ export function renderColumns(
     parts.forEach((v, j) => {
       const h = v * scale;
       y -= h;
-      svg.append(el("rect", { x: i * bw + gap / 2, y, width: Math.max(0.6, bw - gap), height: h, fill: fills[j] }));
+      svg.append(el("rect", { x: i * bw + gap / 2, y, width: Math.max(0.6, bw - gap), height: h, style: `fill:${fills[j]}` }));
     });
   });
   const lab = document.getElementById("batches-labels");
@@ -369,6 +370,64 @@ export function wireAbout(): void {
     e.preventDefault();
     if ($("about").hidden) $("about-tab").click();
   });
+}
+
+/**
+ * An (i) beside each chooser whose options carry `data-term` (a glossary heading's id). It opens a note with
+ * each option's definition, so the difference between, say, soundings and vessel-days is one click away.
+ * The glossary loads on first open.
+ */
+export function wireTermInfo(): void {
+  for (const group of document.querySelectorAll<HTMLElement>(".tabgroup")) {
+    const inputs = [...group.querySelectorAll<HTMLInputElement>("input[data-term]")];
+    const label = group.querySelector(".tabgroup-label");
+    if (!inputs.length || !label) continue;
+    // Options that share a term share one entry (the recent page's 7 days, 30 days and 12 months).
+    const terms = new Map<string, string[]>();
+    for (const input of inputs) {
+      const term = input.dataset.term!;
+      terms.set(term, [...(terms.get(term) ?? []), input.parentElement?.textContent?.trim() ?? input.value]);
+    }
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "term-info";
+    btn.textContent = "i";
+    btn.setAttribute("aria-label", `What the ${(label.textContent ?? "").toLowerCase()} options mean`);
+    btn.setAttribute("aria-expanded", "false");
+    const pop = document.createElement("div");
+    pop.className = "term-pop";
+    pop.hidden = true;
+    label.append(btn);
+    group.append(pop);
+
+    const close = () => {
+      pop.hidden = true;
+      btn.setAttribute("aria-expanded", "false");
+    };
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (!pop.hidden) return close();
+      import("./glossary")
+        .then(({ termHtml }) => {
+          pop.innerHTML = `<dl>${[...terms]
+            .map(([term, names]) => `<dt>${names.join(", ")}</dt><dd>${termHtml(term)} <a href="about.html#${term}">More</a></dd>`)
+            .join("")}</dl>`;
+          pop.hidden = false;
+          btn.setAttribute("aria-expanded", "true");
+          // Keep the note on screen: groups at the right edge open it leftward.
+          pop.style.left = "0px";
+          const over = pop.getBoundingClientRect().right - (window.innerWidth - 12);
+          if (over > 0) pop.style.left = `${-over}px`;
+        })
+        .catch((err: unknown) => console.error(err));
+    });
+    document.addEventListener("click", (e) => {
+      if (!pop.hidden && !pop.contains(e.target as Node)) close();
+    });
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && !pop.hidden) close();
+    });
+  }
 }
 
 export function table(head: string[], rows: string[][]): string {
